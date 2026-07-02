@@ -19,3 +19,6 @@ logs
 *.jsonl
 simbad_cache
 *.parquet
+.env
+data_alex*
+data_01_07/*

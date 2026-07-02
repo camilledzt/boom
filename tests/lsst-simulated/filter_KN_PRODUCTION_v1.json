@@ -1,0 +1,1432 @@
+[
+  {
+    "$match": {
+      "$and": [
+        {
+          "$or": [
+            {
+              "$and": [
+                {
+                  "properties.photstats.g.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.g.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.g.rising.nb_data": {
+                    "$gte": 2
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.g.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.g.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.g.fading.nb_data": {
+                    "$gte": 2
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.r.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.r.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.r.rising.nb_data": {
+                    "$gte": 2
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.r.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.r.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.r.fading.nb_data": {
+                    "$gte": 2
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.i.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.i.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.i.rising.nb_data": {
+                    "$gte": 2
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.i.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.i.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.i.fading.nb_data": {
+                    "$gte": 2
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.u.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.u.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.u.rising.nb_data": {
+                    "$gte": 2
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.u.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.u.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.u.fading.nb_data": {
+                    "$gte": 2
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.z.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.z.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.z.rising.nb_data": {
+                    "$gte": 2
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.y.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.y.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.y.rising.nb_data": {
+                    "$gte": 2
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.z.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.z.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.z.fading.nb_data": {
+                    "$gte": 2
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.y.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.y.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.y.fading.nb_data": {
+                    "$gte": 2
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.g.rising.dt": {
+                "$exists": false
+              }
+            },
+            {
+              "properties.photstats.g.rising.dt": {
+                "$lte": 5
+              }
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.r.rising.dt": {
+                "$exists": false
+              }
+            },
+            {
+              "properties.photstats.r.rising.dt": {
+                "$lte": 5
+              }
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.i.rising.dt": {
+                "$exists": false
+              }
+            },
+            {
+              "properties.photstats.i.rising.dt": {
+                "$lte": 5
+              }
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.z.rising.dt": {
+                "$exists": false
+              }
+            },
+            {
+              "properties.photstats.z.rising.dt": {
+                "$lte": 10
+              }
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.y.rising.dt": {
+                "$exists": false
+              }
+            },
+            {
+              "properties.photstats.y.rising.dt": {
+                "$lte": 10
+              }
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.u.rising.dt": {
+                "$exists": false
+              }
+            },
+            {
+              "properties.photstats.u.rising.dt": {
+                "$lte": 5
+              }
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.g.fading.dt": {
+                "$exists": false
+              }
+            },
+            {
+              "properties.photstats.g.fading.dt": {
+                "$lte": 30
+              }
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.r.fading.dt": {
+                "$exists": false
+              }
+            },
+            {
+              "properties.photstats.r.fading.dt": {
+                "$lte": 30
+              }
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.i.fading.dt": {
+                "$exists": false
+              }
+            },
+            {
+              "properties.photstats.i.fading.dt": {
+                "$lte": 30
+              }
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.z.fading.dt": {
+                "$exists": false
+              }
+            },
+            {
+              "properties.photstats.z.fading.dt": {
+                "$lte": 45
+              }
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.y.fading.dt": {
+                "$exists": false
+              }
+            },
+            {
+              "properties.photstats.y.fading.dt": {
+                "$lte": 45
+              }
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.u.fading.dt": {
+                "$exists": false
+              }
+            },
+            {
+              "properties.photstats.u.fading.dt": {
+                "$lte": 30
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "$project": {
+      "objectId": 1,
+      "candidate.jd": 1,
+      "candidate.shape_flag": 1,
+      "candidate.apFlux_flag": 1,
+      "candidate.centroid_flag": 1,
+      "candidate.isDipole": 1,
+      "candidate.forced_PsfFlux_flag": 1,
+      "candidate.pixelFlags_interpolated": 1,
+      "candidate.pixelFlags_cr": 1,
+      "candidate.forced_PsfFlux_flag_edge": 1,
+      "candidate.pixelFlags_bad": 1,
+      "candidate.pixelFlags_saturated": 1,
+      "candidate.pixelFlags_streakCenter": 1,
+      "candidate.snr_psf": 1,
+      "candidate.magpsf": 1,
+      "candidate.psfFlux": 1,
+      "candidate.psfFlux_flag": 1,
+      "properties.star": 1,
+      "properties.stationary": 1,
+      "properties.near_brightstar": 1,
+      "properties.rock": 1,
+      "coordinates.b": 1,
+      "properties.photstats.g.rising.rate": 1,
+      "properties.photstats.g.rising.red_chi2": 1,
+      "properties.photstats.g.rising.nb_data": 1,
+      "properties.photstats.g.fading.rate": 1,
+      "properties.photstats.g.fading.red_chi2": 1,
+      "properties.photstats.g.fading.nb_data": 1,
+      "properties.photstats.r.rising.rate": 1,
+      "properties.photstats.r.rising.red_chi2": 1,
+      "properties.photstats.r.rising.nb_data": 1,
+      "properties.photstats.r.fading.rate": 1,
+      "properties.photstats.r.fading.red_chi2": 1,
+      "properties.photstats.r.fading.nb_data": 1,
+      "properties.photstats.i.rising.rate": 1,
+      "properties.photstats.i.rising.red_chi2": 1,
+      "properties.photstats.i.rising.nb_data": 1,
+      "properties.photstats.i.fading.rate": 1,
+      "properties.photstats.i.fading.red_chi2": 1,
+      "properties.photstats.i.fading.nb_data": 1,
+      "properties.photstats.u.rising.rate": 1,
+      "properties.photstats.u.rising.red_chi2": 1,
+      "properties.photstats.u.rising.nb_data": 1,
+      "properties.photstats.u.fading.rate": 1,
+      "properties.photstats.u.fading.red_chi2": 1,
+      "properties.photstats.u.fading.nb_data": 1,
+      "properties.photstats.z.rising.rate": 1,
+      "properties.photstats.z.rising.red_chi2": 1,
+      "properties.photstats.z.rising.nb_data": 1,
+      "properties.photstats.y.rising.rate": 1,
+      "properties.photstats.y.rising.red_chi2": 1,
+      "properties.photstats.y.rising.nb_data": 1,
+      "properties.photstats.z.fading.rate": 1,
+      "properties.photstats.z.fading.red_chi2": 1,
+      "properties.photstats.z.fading.nb_data": 1,
+      "properties.photstats.y.fading.rate": 1,
+      "properties.photstats.y.fading.red_chi2": 1,
+      "properties.photstats.y.fading.nb_data": 1,
+      "properties.photstats.g.rising.dt": 1,
+      "properties.photstats.r.rising.dt": 1,
+      "properties.photstats.i.rising.dt": 1,
+      "properties.photstats.z.rising.dt": 1,
+      "properties.photstats.y.rising.dt": 1,
+      "properties.photstats.u.rising.dt": 1,
+      "properties.photstats.g.fading.dt": 1,
+      "properties.photstats.r.fading.dt": 1,
+      "properties.photstats.i.fading.dt": 1,
+      "properties.photstats.z.fading.dt": 1,
+      "properties.photstats.y.fading.dt": 1,
+      "properties.photstats.u.fading.dt": 1,
+      "prv_candidates": 1,
+      "cross_matches.CatWISE2020": 1,
+      "cross_matches.Gaia_DR3": 1,
+      "candidate.ra": 1,
+      "candidate.dec": 1,
+      "cross_matches.milliquas_v8": 1,
+      "cross_matches.2MASS_PSC": 1,
+      "cross_matches.NED": 1
+    }
+  },
+  {
+    "$addFields": {
+      "Gaia_High_PM_SNR3": {
+        "$anyElementTrue": {
+          "$map": {
+            "input": {
+              "$ifNull": [
+                "$cross_matches.Gaia_DR3",
+                []
+              ]
+            },
+            "in": {
+              "$and": [
+                {
+                  "$gt": [
+                    "$$this.pm",
+                    3
+                  ]
+                },
+                {
+                  "$gt": [
+                    {
+                      "$divide": [
+                        "$$this.pm",
+                        {
+                          "$sqrt": {
+                            "$add": [
+                              {
+                                "$pow": [
+                                  "$$this.pmra_error",
+                                  2
+                                ]
+                              },
+                              {
+                                "$pow": [
+                                  "$$this.pmdec_error",
+                                  2
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    3
+                  ]
+                },
+                {
+                  "$lt": [
+                    {
+                      "$abs": {
+                        "$subtract": [
+                          "$candidate.ra",
+                          "$$this.ra"
+                        ]
+                      }
+                    },
+                    0.000277778
+                  ]
+                },
+                {
+                  "$lt": [
+                    {
+                      "$abs": {
+                        "$subtract": [
+                          "$candidate.dec",
+                          "$$this.dec"
+                        ]
+                      }
+                    },
+                    0.000277778
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "Is_Quasar": {
+        "$anyElementTrue": {
+          "$map": {
+            "input": {
+              "$ifNull": [
+                "$cross_matches.milliquas_v8",
+                []
+              ]
+            },
+            "in": {
+              "$eq": [
+                "$$this.Descrip",
+                "Q"
+              ]
+            }
+          }
+        }
+      },
+      "gaia_snr_gt5": {
+        "$anyElementTrue": {
+          "$map": {
+            "input": {
+              "$ifNull": [
+                "$cross_matches.Gaia_DR3",
+                []
+              ]
+            },
+            "in": {
+              "$gt": [
+                {
+                  "$abs": {
+                    "$divide": [
+                      "$$this.parallax",
+                      "$$this.parallax_error"
+                    ]
+                  }
+                },
+                5
+              ]
+            }
+          }
+        }
+      },
+      "TwoMass_Red_Star_IR": {
+        "$anyElementTrue": {
+          "$map": {
+            "input": {
+              "$ifNull": [
+                "$cross_matches.2MASS_PSC",
+                []
+              ]
+            },
+            "in": {
+              "$and": [
+                {
+                  "$lte": [
+                    {
+                      "$sqrt": {
+                        "$add": [
+                          {
+                            "$pow": [
+                              "$TwoMass_ra_diff",
+                              2
+                            ]
+                          },
+                          {
+                            "$pow": [
+                              "$TwoMass_dec_diff",
+                              2
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    0.00027
+                  ]
+                },
+                {
+                  "$gt": [
+                    {
+                      "$subtract": [
+                        "$$this.h_m",
+                        "$$this.k_m"
+                      ]
+                    },
+                    -0.2
+                  ]
+                },
+                {
+                  "$lt": [
+                    {
+                      "$subtract": [
+                        "$$this.h_m",
+                        "$$this.k_m"
+                      ]
+                    },
+                    0.4
+                  ]
+                },
+                {
+                  "$lt": [
+                    {
+                      "$subtract": [
+                        "$$this.j_m",
+                        "$$this.k_m"
+                      ]
+                    },
+                    0.6
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "WiseW1W2_gt1": {
+        "$anyElementTrue": {
+          "$map": {
+            "input": {
+              "$ifNull": [
+                "$cross_matches.CatWISE2020",
+                []
+              ]
+            },
+            "in": {
+              "$gt": [
+                {
+                  "$subtract": [
+                    "$$this.w1mpro",
+                    "$$this.w2mpro"
+                  ]
+                },
+                0.8
+              ]
+            }
+          }
+        }
+      },
+      "jd_min_prv": {
+        "$min": "$prv_candidates.jd"
+      }
+    }
+  },
+  {
+    "$addFields": {
+      "prv_cands_90_bin_hist_arr": {
+        "$filter": {
+          "input": "$prv_candidates",
+          "cond": {
+            "$and": [
+              {
+                "$gt": [
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      "$jd_min_prv"
+                    ]
+                  },
+                  90
+                ]
+              },
+              {
+                "$eq": [
+                  "$$this.isdiffpos",
+                  true
+                ]
+              },
+              {
+                "$gt": [
+                  "$$this.magpsf",
+                  0
+                ]
+              },
+              {
+                "$lt": [
+                  "$$this.magpsf",
+                  99
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "$addFields": {
+      "dets_jd_btw_90_180": {
+        "$filter": {
+          "input": "$prv_cands_90_bin_hist_arr",
+          "cond": {
+            "$and": [
+              {
+                "$lt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      90
+                    ]
+                  }
+                ]
+              },
+              {
+                "$gt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      180
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "dets_jd_btw_180_270": {
+        "$filter": {
+          "input": "$prv_cands_90_bin_hist_arr",
+          "cond": {
+            "$and": [
+              {
+                "$lt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      180
+                    ]
+                  }
+                ]
+              },
+              {
+                "$gt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      270
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "dets_jd_btw_270_360": {
+        "$filter": {
+          "input": "$prv_cands_90_bin_hist_arr",
+          "cond": {
+            "$and": [
+              {
+                "$lt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      270
+                    ]
+                  }
+                ]
+              },
+              {
+                "$gt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      360
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "dets_jd_btw_360_450": {
+        "$filter": {
+          "input": "$prv_cands_90_bin_hist_arr",
+          "cond": {
+            "$and": [
+              {
+                "$lt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      360
+                    ]
+                  }
+                ]
+              },
+              {
+                "$gt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      450
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "dets_jd_btw_450_540": {
+        "$filter": {
+          "input": "$prv_cands_90_bin_hist_arr",
+          "cond": {
+            "$and": [
+              {
+                "$lt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      450
+                    ]
+                  }
+                ]
+              },
+              {
+                "$gt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      540
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "dets_jd_btw_540_630": {
+        "$filter": {
+          "input": "$prv_cands_90_bin_hist_arr",
+          "cond": {
+            "$and": [
+              {
+                "$lt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      540
+                    ]
+                  }
+                ]
+              },
+              {
+                "$gt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      630
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "dets_jd_btw_630_720": {
+        "$filter": {
+          "input": "$prv_cands_90_bin_hist_arr",
+          "cond": {
+            "$and": [
+              {
+                "$lt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      630
+                    ]
+                  }
+                ]
+              },
+              {
+                "$gt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      720
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "dets_jd_btw_720_810": {
+        "$filter": {
+          "input": "$prv_cands_90_bin_hist_arr",
+          "cond": {
+            "$and": [
+              {
+                "$lt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      720
+                    ]
+                  }
+                ]
+              },
+              {
+                "$gt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      810
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "dets_jd_btw_810_900": {
+        "$filter": {
+          "input": "$prv_cands_90_bin_hist_arr",
+          "cond": {
+            "$and": [
+              {
+                "$lt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      810
+                    ]
+                  }
+                ]
+              },
+              {
+                "$gt": [
+                  "$$this.jd",
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      900
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "$match": {
+      "$and": [
+        {
+          "$and": [
+            {
+              "candidate.shape_flag": {
+                "$eq": false
+              }
+            },
+            {
+              "candidate.apFlux_flag": {
+                "$eq": false
+              }
+            },
+            {
+              "candidate.centroid_flag": {
+                "$eq": false
+              }
+            },
+            {
+              "candidate.isDipole": {
+                "$eq": false
+              }
+            },
+            {
+              "candidate.forced_PsfFlux_flag": {
+                "$eq": false
+              }
+            },
+            {
+              "candidate.pixelFlags_interpolated": {
+                "$eq": false
+              }
+            },
+            {
+              "candidate.pixelFlags_cr": {
+                "$eq": false
+              }
+            },
+            {
+              "candidate.forced_PsfFlux_flag_edge": {
+                "$eq": false
+              }
+            },
+            {
+              "candidate.pixelFlags_bad": {
+                "$eq": false
+              }
+            },
+            {
+              "candidate.pixelFlags_saturated": {
+                "$eq": false
+              }
+            },
+            {
+              "candidate.pixelFlags_streakCenter": {
+                "$eq": false
+              }
+            },
+            {
+              "candidate.snr_psf": {
+                "$gte": 6
+              }
+            },
+            {
+              "candidate.magpsf": {
+                "$lt": 23.5
+              }
+            },
+            {
+              "candidate.psfFlux": {
+                "$gt": 0
+              }
+            },
+            {
+              "$expr": {
+                "$lte": [
+                  {
+                    "$subtract": [
+                      "$candidate.jd",
+                      "$jd_min_prv"
+                    ]
+                  },
+                  20
+                ]
+              }
+            },
+            {
+              "candidate.psfFlux_flag": {
+                "$eq": false
+              }
+            },
+            {
+              "properties.star": {
+                "$eq": false
+              }
+            },
+            {
+              "properties.stationary": {
+                "$eq": true
+              }
+            },
+            {
+              "properties.near_brightstar": {
+                "$eq": false
+              }
+            },
+            {
+              "properties.rock": {
+                "$eq": false
+              }
+            },
+            {
+              "$or": [
+                {
+                  "coordinates.b": {
+                    "$gte": 20
+                  }
+                },
+                {
+                  "coordinates.b": {
+                    "$lte": -20
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$nor": [
+            {
+              "$and": [
+                {
+                  "WiseW1W2_gt1": {
+                    "$eq": true
+                  }
+                },
+                {
+                  "$and": [
+                    {
+                      "prv_cands_90_bin_hist_arr.50": {
+                        "$exists": true
+                      }
+                    },
+                    {
+                      "$or": [
+                        {
+                          "$and": [
+                            {
+                              "dets_jd_btw_90_180.10": {
+                                "$exists": true
+                              }
+                            },
+                            {
+                              "dets_jd_btw_180_270.10": {
+                                "$exists": true
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "$and": [
+                            {
+                              "dets_jd_btw_180_270.10": {
+                                "$exists": true
+                              }
+                            },
+                            {
+                              "dets_jd_btw_270_360.10": {
+                                "$exists": true
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "$and": [
+                            {
+                              "dets_jd_btw_270_360.10": {
+                                "$exists": true
+                              }
+                            },
+                            {
+                              "dets_jd_btw_360_450.10": {
+                                "$exists": true
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "$and": [
+                            {
+                              "dets_jd_btw_360_450.10": {
+                                "$exists": true
+                              }
+                            },
+                            {
+                              "dets_jd_btw_450_540.10": {
+                                "$exists": true
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "$and": [
+                            {
+                              "dets_jd_btw_450_540.10": {
+                                "$exists": true
+                              }
+                            },
+                            {
+                              "dets_jd_btw_540_630.10": {
+                                "$exists": true
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "$and": [
+                            {
+                              "dets_jd_btw_540_630.10": {
+                                "$exists": true
+                              }
+                            },
+                            {
+                              "dets_jd_btw_630_720.10": {
+                                "$exists": true
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "$and": [
+                            {
+                              "dets_jd_btw_630_720.10": {
+                                "$exists": true
+                              }
+                            },
+                            {
+                              "dets_jd_btw_720_810.10": {
+                                "$exists": true
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "$and": [
+                            {
+                              "dets_jd_btw_720_810.10": {
+                                "$exists": true
+                              }
+                            },
+                            {
+                              "dets_jd_btw_810_900.10": {
+                                "$exists": true
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$and": [
+            {
+              "Gaia_High_PM_SNR3": {
+                "$eq": false
+              }
+            },
+            {
+              "Is_Quasar": {
+                "$eq": false
+              }
+            },
+            {
+              "gaia_snr_gt5": {
+                "$eq": false
+              }
+            },
+            {
+              "TwoMass_Red_Star_IR": {
+                "$eq": false
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "$project": {
+      "objectId": 1,
+      "candidate.jd": 1,
+      "WiseW1W2_gt1": 1,
+      "prv_cands_90_bin_hist_arr": 1,
+      "dets_jd_btw_90_180": 1,
+      "dets_jd_btw_180_270": 1,
+      "dets_jd_btw_270_360": 1,
+      "dets_jd_btw_360_450": 1,
+      "dets_jd_btw_450_540": 1,
+      "dets_jd_btw_540_630": 1,
+      "dets_jd_btw_630_720": 1,
+      "dets_jd_btw_720_810": 1,
+      "dets_jd_btw_810_900": 1,
+      "Gaia_High_PM_SNR3": 1,
+      "Is_Quasar": 1,
+      "gaia_snr_gt5": 1,
+      "TwoMass_Red_Star_IR": 1,
+      "jd_min_prv": 1,
+      "candidate.shape_flag": 1,
+      "candidate.apFlux_flag": 1,
+      "candidate.centroid_flag": 1,
+      "candidate.isDipole": 1,
+      "candidate.forced_PsfFlux_flag": 1,
+      "candidate.pixelFlags_interpolated": 1,
+      "candidate.pixelFlags_cr": 1,
+      "candidate.forced_PsfFlux_flag_edge": 1,
+      "candidate.pixelFlags_bad": 1,
+      "candidate.pixelFlags_saturated": 1,
+      "candidate.pixelFlags_streakCenter": 1,
+      "candidate.snr_psf": 1,
+      "candidate.magpsf": 1,
+      "candidate.psfFlux": 1,
+      "candidate.psfFlux_flag": 1,
+      "properties.star": 1,
+      "properties.stationary": 1,
+      "properties.near_brightstar": 1,
+      "properties.rock": 1,
+      "coordinates.b": 1,
+      "properties.photstats.g.rising.rate": 1,
+      "properties.photstats.g.rising.red_chi2": 1,
+      "properties.photstats.g.rising.nb_data": 1,
+      "properties.photstats.g.fading.rate": 1,
+      "properties.photstats.g.fading.red_chi2": 1,
+      "properties.photstats.g.fading.nb_data": 1,
+      "properties.photstats.r.rising.rate": 1,
+      "properties.photstats.r.rising.red_chi2": 1,
+      "properties.photstats.r.rising.nb_data": 1,
+      "properties.photstats.r.fading.rate": 1,
+      "properties.photstats.r.fading.red_chi2": 1,
+      "properties.photstats.r.fading.nb_data": 1,
+      "properties.photstats.i.rising.rate": 1,
+      "properties.photstats.i.rising.red_chi2": 1,
+      "properties.photstats.i.rising.nb_data": 1,
+      "properties.photstats.i.fading.rate": 1,
+      "properties.photstats.i.fading.red_chi2": 1,
+      "properties.photstats.i.fading.nb_data": 1,
+      "properties.photstats.u.rising.rate": 1,
+      "properties.photstats.u.rising.red_chi2": 1,
+      "properties.photstats.u.rising.nb_data": 1,
+      "properties.photstats.u.fading.rate": 1,
+      "properties.photstats.u.fading.red_chi2": 1,
+      "properties.photstats.u.fading.nb_data": 1,
+      "properties.photstats.z.rising.rate": 1,
+      "properties.photstats.z.rising.red_chi2": 1,
+      "properties.photstats.z.rising.nb_data": 1,
+      "properties.photstats.y.rising.rate": 1,
+      "properties.photstats.y.rising.red_chi2": 1,
+      "properties.photstats.y.rising.nb_data": 1,
+      "properties.photstats.z.fading.rate": 1,
+      "properties.photstats.z.fading.red_chi2": 1,
+      "properties.photstats.z.fading.nb_data": 1,
+      "properties.photstats.y.fading.rate": 1,
+      "properties.photstats.y.fading.red_chi2": 1,
+      "properties.photstats.y.fading.nb_data": 1,
+      "properties.photstats.g.rising.dt": 1,
+      "properties.photstats.r.rising.dt": 1,
+      "properties.photstats.i.rising.dt": 1,
+      "properties.photstats.z.rising.dt": 1,
+      "properties.photstats.y.rising.dt": 1,
+      "properties.photstats.u.rising.dt": 1,
+      "properties.photstats.g.fading.dt": 1,
+      "properties.photstats.r.fading.dt": 1,
+      "properties.photstats.i.fading.dt": 1,
+      "properties.photstats.z.fading.dt": 1,
+      "properties.photstats.y.fading.dt": 1,
+      "properties.photstats.u.fading.dt": 1,
+      "prv_candidates": 1,
+      "cross_matches.CatWISE2020": 1,
+      "cross_matches.Gaia_DR3": 1,
+      "candidate.ra": 1,
+      "candidate.dec": 1,
+      "cross_matches.milliquas_v8": 1,
+      "cross_matches.2MASS_PSC": 1,
+      "cross_matches.NED": 1,
+      "annotations": {
+        "Cross-match_NED": "$cross_matches.NED",
+        "Cross-match_AGN": "$cross_matches.milliquas_v8"
+      }
+    }
+  }
+]
