@@ -140,6 +140,7 @@ services:
       RUST_LOG: debug,ort=error
       BOOM_KAFKA__CONSUMER__LSST__USERNAME: ""
       BOOM_KAFKA__CONSUMER__LSST__PASSWORD: ""
+      OTEL_SDK_DISABLED: "true"
     depends_on:
       producer:
         condition: service_completed_successfully
@@ -165,6 +166,7 @@ services:
     environment:
       RUST_LOG: debug,ort=error
       BOOM_GPU__ENABLED: "false"
+      OTEL_SDK_DISABLED: "true"
     networks:
       - boom
     depends_on:

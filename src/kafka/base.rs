@@ -83,7 +83,10 @@ pub fn check_kafka_topic_partitions(
         .set("bootstrap.servers", bootstrap_servers)
         .set("group.id", group_id);
 
-    if let (Some(username), Some(password)) = (username, password) {
+    if let (Some(username), Some(password)) = (
+        username.filter(|s| !s.is_empty()),
+        password.filter(|s| !s.is_empty()),
+    ) {
         client_config
             .set("security.protocol", "SASL_PLAINTEXT")
             .set("sasl.mechanisms", "SCRAM-SHA-512")
@@ -612,7 +615,10 @@ pub async fn consumer(
         // can be manually controlled during the seek operation
         .set("enable.auto.offset.store", "false");
 
-    if let (Some(username), Some(password)) = (username, password) {
+    if let (Some(username), Some(password)) = (
+        username.filter(|s| !s.is_empty()),
+        password.filter(|s| !s.is_empty()),
+    ) {
         client_config
             .set("security.protocol", "SASL_PLAINTEXT")
             .set("sasl.mechanisms", "SCRAM-SHA-512")

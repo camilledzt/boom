@@ -50,6 +50,8 @@ config["kafka"]["consumer"]["lsst"]["schema_github_fallback_url"] = (
 config["kafka"]["consumer"]["lsst"].pop("schema_registry", None)
 config["kafka"]["producer"]["server"] = "broker:29092"
 config["redis"]["host"] = "valkey"
+config["cutouts_storage"]["host"] = "mongo"
+config["cutouts_storage"]["password"] = "mongoadminsecret"
 config["api"]["auth"]["secret_key"] = "lsst-simulated-test-secret-key-32chars"
 config["api"]["auth"]["admin_password"] = "adminsecret"
 
