@@ -228,11 +228,16 @@ def _alert(
 def _load_position_lookup(data_dir: Path) -> dict[int, tuple[float, float]]:
     """Build a mapping from lightcurve file index → (ra_deg, dec_deg).
 
-    The filename index (e.g. 0009 from lightcurve_LSSTlike_0009.csv) matches
-    column `i` in summary.csv.  That row's `field_idx` maps to `field_index`
-    in opsim_fields_index.csv where the true RA/Dec are stored.
+    Supports two summary.csv formats:
+    - New format: has fieldRA/fieldDec columns directly
+    - Old format: has field_idx column, requires opsim_fields_index.csv for ra0_deg/dec0_deg
     """
     summary = pd.read_csv(data_dir / "summary.csv")
+    if "fieldRA" in summary.columns and "fieldDec" in summary.columns:
+        return {
+            int(row["i"]): (float(row["fieldRA"]), float(row["fieldDec"]))
+            for _, row in summary.iterrows()
+        }
     opsim = pd.read_csv(data_dir / "opsim_fields_index.csv")
     merged = summary.merge(opsim, left_on="field_idx", right_on="field_index")
     return {

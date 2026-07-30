@@ -80,18 +80,25 @@ print("Generated config.yaml")
 # Count expected alerts: only consider lightcurve files that actually exist
 data_dir = DATA_DIR
 csv_files = sorted(Path(data_dir).glob("lightcurve_*.csv"), key=lambda f: int(f.stem.split("_")[-1]))
+if args.limit > 0:
+    csv_files = csv_files[: args.limit]
+n_objects = len(csv_files)
 lc_indices = {int(f.stem.split("_")[-1]) for f in csv_files}
+
 summary_path = os.path.join(data_dir, "summary.csv")
 summary = pd.read_csv(summary_path)
-lc_indices_sorted = sorted(lc_indices)
-if args.limit > 0:
-    lc_indices_sorted = lc_indices_sorted[: args.limit]
-matched = summary[summary["i"].isin(lc_indices_sorted) & (summary["n_detected"] > 0)]
-expected_alerts = int(matched["n_detected"].sum())
-n_active = len(matched)
-n_objects = len(lc_indices_sorted)
+matched = summary[summary["i"].isin(lc_indices)]
+n_detected_col = matched["n_detected"] if "n_detected" in matched.columns else pd.Series(dtype=float)
+expected_alerts = int(n_detected_col.sum()) if n_detected_col.notna().any() else 0
+
+if expected_alerts == 0:
+    # n_detected unavailable — count rows per CSV file directly
+    mag_col = "mag" if "mag" in pd.read_csv(csv_files[0]).columns else "mag_obs"
+    expected_alerts = sum(len(pd.read_csv(f).dropna(subset=[mag_col])) for f in csv_files)
+
+n_active = n_objects
 print(
-    f"Expected alerts: {expected_alerts} (from {n_active}/{n_objects} objects with detections)"
+    f"Expected alerts: {expected_alerts} (from {n_active}/{n_objects} lightcurve files)"
 )
 
 # Run the test
