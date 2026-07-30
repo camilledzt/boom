@@ -2,12 +2,11 @@
 """
 Produce simulated LSST-like alerts from CSV files to Kafka topic 'alerts-simulated'.
 
-Each CSV file in data_alex/ is treated as one simulated source (object).
-Only rows where mag_true is finite are used:
-  - detected=True  → diaSource (detection), contributes to prvDiaSources in subsequent alerts
-  - detected=False → prvDiaForcedSource (non-detection / upper limit)
+Each CSV file is treated as one simulated source (object). All rows are detections.
+Expected columns: time_mjd, band, mag, candidate_id
+object_id is derived from the filename numeric suffix (e.g. lightcurve_0004.csv → 4).
 
-One Kafka message is produced per detection, carrying the full history up to that point.
+One Kafka message is produced per row, carrying the full detection history up to that point.
 
 Avro format: Confluent Schema Registry format
   [0x00][4-byte schema_id big-endian][avro datum]
@@ -78,7 +77,7 @@ def _dia_source(
     mjd: float,
     band: str,
     flux: float,
-    flux_err: float,
+    flux_err: float | None,
     snr: float | None,
     visit: int,
     detector: int = 0,
@@ -213,9 +212,7 @@ def _alert(
         "diaSourceId": candid,
         "diaSource": dia_source,
         "prvDiaSources": prv_dia_sources if prv_dia_sources else None,
-        "prvDiaForcedSources": prv_dia_forced_sources
-        if prv_dia_forced_sources
-        else None,
+        "prvDiaForcedSources": prv_dia_forced_sources or None,
         "diaObject": dia_object,
         "cutoutDifference": _EMPTY_CUTOUT,
         "cutoutScience": _EMPTY_CUTOUT,
@@ -248,114 +245,69 @@ def alerts_from_csv(
     filepath: Path, lc_index: int, ra: float, dec: float
 ) -> list[dict]:
     """
-    Read a CSV file and generate one alert per detection.
+    Read a CSV file and generate one alert per row (all rows are detections).
 
-    Filtering rule: only rows where mag_true is finite are kept.
-    - detected=True  → detection alert (diaSource)
-    - detected=False → non-detection (prvDiaForcedSource in future alerts)
-
-    object_id and candid are read directly from the 'objectid' and
-    'candidate_id' CSV columns (e.g. candidate_id="51615_3" → candid derived
-    as objectid * 100_000 + sequence).  lc_index is kept only for the
-    forced-source ID fallback.
+    Expected columns: time_mjd, band, mag, candidate_id
+    object_id is derived from the filename numeric suffix.
+    mag_err is not available; flux_err defaults to 5% of flux.
     """
     df = pd.read_csv(filepath)
-
-    # Keep only rows where mag_true is a real finite number
-    df = df[df["mag_true"].notna() & np.isfinite(df["mag_true"])].copy()
-    df = df.sort_values("observationStartMJD").reset_index(drop=True)
+    df = df.dropna(subset=["mag"]).sort_values("time_mjd").reset_index(drop=True)
 
     if df.empty:
         return []
 
-    # Read object_id from the CSV column; boom rejects diaObjectId=0 as missing
-    object_id = int(df["objectid"].iloc[0])
+    object_id = int(filepath.stem.split("_")[-1])
     if object_id == 0:
         object_id = lc_index + 1_000_000
 
-    detections: list[dict] = []  # accumulates diaSource records
-    non_detections: list[dict] = []  # accumulates diaForcedSource records
+    detections: list[dict] = []
     alerts: list[dict] = []
-
     detection_count = 0
 
     for visit_idx, row in df.iterrows():
-        detected = str(row.get("detected", "False")).strip().lower() == "true"
-        mjd = float(row["observationStartMJD"])
+        mjd = float(row["time_mjd"])
         band = str(row["band"])
+        flux = mag_to_flux(float(row["mag"]))
+        flux_err = None
 
-        if detected:
-            if pd.isna(row.get("mag_obs")):
-                continue  # skip if no magnitude despite detected=True
+        cid_str = str(row["candidate_id"])
+        seq = int(cid_str.split("_", 1)[1])
+        candid = object_id * 100_000 + seq
+        detection_count += 1
 
-            flux = mag_to_flux(float(row["mag_obs"]))
-            mag_err = row.get("mag_err")
-            flux_err = (
-                mag_err_to_flux_err(float(mag_err), flux)
-                if pd.notna(mag_err)
-                else flux * 0.05
-            )
-            snr_val = row.get("snr_obs")
-            snr = float(snr_val) if pd.notna(snr_val) else None
+        dia_src = _dia_source(
+            candid=candid,
+            object_id=object_id,
+            ra=ra,
+            dec=dec,
+            mjd=mjd,
+            band=band,
+            flux=flux,
+            flux_err=flux_err,
+            snr=None,
+            visit=int(visit_idx),
+        )
 
-            # Derive integer candid from candidate_id column (e.g. "51615_3" → seq=3)
-            cid_str = str(row["candidate_id"])
-            seq = int(cid_str.split("_", 1)[1])
-            candid = object_id * 100_000 + seq
-            detection_count += 1
+        first_mjd = detections[0]["midpointMjdTai"] if detections else mjd
+        dia_obj = _dia_object(
+            object_id=object_id,
+            ra=ra,
+            dec=dec,
+            first_mjd=first_mjd,
+            last_mjd=mjd,
+            n_sources=detection_count,
+        )
 
-            dia_src = _dia_source(
-                candid=candid,
-                object_id=object_id,
-                ra=ra,
-                dec=dec,
-                mjd=mjd,
-                band=band,
-                flux=flux,
-                flux_err=flux_err,
-                snr=snr,
-                visit=int(visit_idx),
-            )
-
-            # diaObject grows with each detection
-            first_mjd = detections[0]["midpointMjdTai"] if detections else mjd
-            dia_obj = _dia_object(
-                object_id=object_id,
-                ra=ra,
-                dec=dec,
-                first_mjd=first_mjd,
-                last_mjd=mjd,
-                n_sources=detection_count,
-            )
-
-            alert = _alert(
-                candid=candid,
-                dia_source=dia_src,
-                prv_dia_sources=list(detections),
-                prv_dia_forced_sources=list(non_detections),
-                dia_object=dia_obj,
-            )
-            alerts.append(alert)
-            detections.append(dia_src)
-
-        else:
-            # Non-detection: only add if mag_ulim is available
-            mag_ulim = row.get("mag_ulim")
-            if pd.isna(mag_ulim):
-                continue
-
-            flux_err = mag_ulim_to_flux_err(float(mag_ulim))
-            forced_src = _dia_forced_source(
-                forced_id=object_id * 100_000 + int(visit_idx),
-                object_id=object_id,
-                ra=ra,
-                dec=dec,
-                mjd=mjd,
-                band=band,
-                flux_err=flux_err,
-                visit=int(visit_idx),
-            )
-            non_detections.append(forced_src)
+        alert = _alert(
+            candid=candid,
+            dia_source=dia_src,
+            prv_dia_sources=list(detections),
+            prv_dia_forced_sources=None,
+            dia_object=dia_obj,
+        )
+        alerts.append(alert)
+        detections.append(dia_src)
 
     return alerts
 
@@ -452,7 +404,7 @@ def main() -> None:
     producer = Producer({"bootstrap.servers": args.broker, "linger.ms": 5})
 
     data_dir = Path(args.data_dir)
-    csv_files = sorted(data_dir.glob("lightcurve_LSSTlike_*.csv"), key=lambda f: int(f.stem.split("_")[-1]))
+    csv_files = sorted(data_dir.glob("lightcurve_*.csv"), key=lambda f: int(f.stem.split("_")[-1]))
     if not csv_files:
         print(f"No lightcurve CSV files found in {data_dir}")
         return
@@ -460,8 +412,13 @@ def main() -> None:
     if args.limit > 0:
         csv_files = csv_files[: args.limit]
 
-    print("Loading field position lookup tables...")
-    position_lookup = _load_position_lookup(data_dir)
+    position_lookup: dict[int, tuple[float, float]] = {}
+    summary_csv = data_dir / "summary.csv"
+    if summary_csv.exists():
+        print("Loading field position lookup tables...")
+        position_lookup = _load_position_lookup(data_dir)
+    else:
+        print("No summary.csv found, using (ra=0, dec=0) for all objects.")
 
     tasks = [
         (str(f), int(f.stem.split("_")[-1]), *position_lookup.get(int(f.stem.split("_")[-1]), (0.0, 0.0)))

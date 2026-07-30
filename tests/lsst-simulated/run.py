@@ -79,7 +79,7 @@ print("Generated config.yaml")
 
 # Count expected alerts: only consider lightcurve files that actually exist
 data_dir = DATA_DIR
-csv_files = sorted(Path(data_dir).glob("lightcurve_LSSTlike_*.csv"))
+csv_files = sorted(Path(data_dir).glob("lightcurve_*.csv"), key=lambda f: int(f.stem.split("_")[-1]))
 lc_indices = {int(f.stem.split("_")[-1]) for f in csv_files}
 summary_path = os.path.join(data_dir, "summary.csv")
 summary = pd.read_csv(summary_path)
