@@ -77,7 +77,7 @@ def _dia_source(
     mjd: float,
     band: str,
     flux: float,
-    flux_err: float | None,
+    flux_err: float,
     snr: float | None,
     visit: int,
     detector: int = 0,
@@ -274,7 +274,7 @@ def alerts_from_csv(
         mjd = float(row["time_mjd"])
         band = str(row["band"])
         flux = mag_to_flux(float(row["mag"]))
-        flux_err = None
+        flux_err = 0.0
 
         cid_str = str(row["candidate_id"])
         seq = int(cid_str.split("_", 1)[1])
