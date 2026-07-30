@@ -22,3 +22,6 @@ simbad_cache
 .env
 data_alex*
 data_01_07/*
+plots/*
+photometry.csv
+stats.csv
