@@ -107,7 +107,7 @@ services:
     command:
       - |
         pip install --quiet lsst-alert-packet confluent-kafka numpy pandas && \
-        python /produce-lsst-simulated.py --broker broker:29092 --data-dir /data_alex --reset ${PRODUCER_LIMIT:+--limit $PRODUCER_LIMIT}
+        python /produce-lsst-simulated.py --broker broker:29092 --data-dir /data_alex --reset ${PRODUCER_LIMIT:+--limit $PRODUCER_LIMIT} ${PRODUCER_WORKERS:+--workers $PRODUCER_WORKERS}
 
   add-filter:
     image: boom-astro/boom:latest

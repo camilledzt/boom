@@ -153,6 +153,8 @@ def build_target_lookup(data_dir: Path) -> dict[int, str]:
         try:
             first_row = pd.read_csv(csv_file, usecols=["objectid"], nrows=1)
             object_id = int(first_row["objectid"].iloc[0])
+            if object_id == 0:
+                object_id = lc_index + 1_000_000
             lookup[object_id] = str(row["target_name"].iloc[0])
         except Exception:
             continue

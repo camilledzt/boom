@@ -19,6 +19,7 @@ Usage:
 
 import argparse
 import math
+import multiprocessing as mp
 import struct
 import time
 from pathlib import Path
@@ -244,7 +245,7 @@ def _load_position_lookup(data_dir: Path) -> dict[int, tuple[float, float]]:
 
 
 def alerts_from_csv(
-    filepath: Path, lc_index: int, object_id: int, ra: float, dec: float
+    filepath: Path, lc_index: int, ra: float, dec: float
 ) -> list[dict]:
     """
     Read a CSV file and generate one alert per detection.
@@ -253,8 +254,10 @@ def alerts_from_csv(
     - detected=True  → detection alert (diaSource)
     - detected=False → non-detection (prvDiaForcedSource in future alerts)
 
-    candid / forced_id = lc_index * 10000 + row_index
-    e.g. file 0008, row 5 → 80005
+    object_id and candid are read directly from the 'objectid' and
+    'candidate_id' CSV columns (e.g. candidate_id="51615_3" → candid derived
+    as objectid * 100_000 + sequence).  lc_index is kept only for the
+    forced-source ID fallback.
     """
     df = pd.read_csv(filepath)
 
@@ -264,6 +267,11 @@ def alerts_from_csv(
 
     if df.empty:
         return []
+
+    # Read object_id from the CSV column; boom rejects diaObjectId=0 as missing
+    object_id = int(df["objectid"].iloc[0])
+    if object_id == 0:
+        object_id = lc_index + 1_000_000
 
     detections: list[dict] = []  # accumulates diaSource records
     non_detections: list[dict] = []  # accumulates diaForcedSource records
@@ -290,7 +298,10 @@ def alerts_from_csv(
             snr_val = row.get("snr_obs")
             snr = float(snr_val) if pd.notna(snr_val) else None
 
-            candid = lc_index * 10000 + int(visit_idx)
+            # Derive integer candid from candidate_id column (e.g. "51615_3" → seq=3)
+            cid_str = str(row["candidate_id"])
+            seq = int(cid_str.split("_", 1)[1])
+            candid = object_id * 100_000 + seq
             detection_count += 1
 
             dia_src = _dia_source(
@@ -335,7 +346,7 @@ def alerts_from_csv(
 
             flux_err = mag_ulim_to_flux_err(float(mag_ulim))
             forced_src = _dia_forced_source(
-                forced_id=lc_index * 10000 + int(visit_idx),
+                forced_id=object_id * 100_000 + int(visit_idx),
                 object_id=object_id,
                 ra=ra,
                 dec=dec,
@@ -379,6 +390,31 @@ def reset_topic(broker: str, topic: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Parallel serialization helpers
+# ---------------------------------------------------------------------------
+
+_worker_schema = None
+_worker_sr_header = None
+
+
+def _worker_init(schema_version: str, schema_id: int) -> None:
+    global _worker_schema, _worker_sr_header
+    sr = packet.SchemaRegistry.from_filesystem()
+    _worker_schema = sr.get_by_version(schema_version)
+    _worker_sr_header = b"\x00" + struct.pack(">I", schema_id)
+
+
+def _serialize_file(args: tuple) -> tuple[str, int | None, list[bytes]]:
+    csv_path, lc_index, ra, dec = args
+    alerts = alerts_from_csv(Path(csv_path), lc_index, ra, dec)
+    if not alerts:
+        return (csv_path, None, [])
+    object_id = alerts[0]["diaSource"]["diaObjectId"]
+    payloads = [_worker_sr_header + _worker_schema.serialize(a) for a in alerts]
+    return (csv_path, object_id, payloads)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -395,19 +431,20 @@ def main() -> None:
         "--data-dir", default=str(DATA_DIR), help="Directory containing CSV files"
     )
     parser.add_argument(
-        "--limit", type=int, default=0, help="Max alerts to produce (0 = no limit)"
+        "--limit", type=int, default=0, help="Max objects to produce (0 = no limit)"
     )
     parser.add_argument(
         "--reset",
         action="store_true",
         help="Delete and recreate the Kafka topic before producing",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=mp.cpu_count(),
+        help="Number of parallel serialization workers (default: CPU count)",
+    )
     args = parser.parse_args()
-
-    # Load LSST v11.0 schema
-    print(f"Loading LSST schema v{SCHEMA_VERSION} (schema_id={SCHEMA_ID})...")
-    sr = packet.SchemaRegistry.from_filesystem()
-    schema = sr.get_by_version(SCHEMA_VERSION)
 
     if args.reset:
         reset_topic(args.broker, args.topic)
@@ -415,46 +452,42 @@ def main() -> None:
     producer = Producer({"bootstrap.servers": args.broker, "linger.ms": 5})
 
     data_dir = Path(args.data_dir)
-    csv_files = sorted(data_dir.glob("lightcurve_LSSTlike_*.csv"))
+    csv_files = sorted(data_dir.glob("lightcurve_LSSTlike_*.csv"), key=lambda f: int(f.stem.split("_")[-1]))
     if not csv_files:
         print(f"No lightcurve CSV files found in {data_dir}")
         return
 
+    if args.limit > 0:
+        csv_files = csv_files[: args.limit]
+
     print("Loading field position lookup tables...")
     position_lookup = _load_position_lookup(data_dir)
 
+    tasks = [
+        (str(f), int(f.stem.split("_")[-1]), *position_lookup.get(int(f.stem.split("_")[-1]), (0.0, 0.0)))
+        for f in csv_files
+    ]
+
+    print(f"Serializing {len(tasks)} objects with {args.workers} workers...")
     total = 0
-    for csv_file in csv_files:
-        # Extract 4-digit index from filename (e.g. 0009 from lightcurve_LSSTlike_0009.csv)
-        lc_index = int(csv_file.stem.split("_")[-1])
-        # Use a large non-zero base to avoid ID=0 (boom treats diaObjectId=0 as missing)
-        object_id = 1_000_000 + lc_index
-        ra, dec = position_lookup.get(lc_index, (0.0, 0.0))
-        print(
-            f"[{csv_file.name}] object_id={object_id} lc_index={lc_index} ra={ra:.4f} dec={dec:.4f} ...",
-            end=" ",
-            flush=True,
-        )
-        alerts = alerts_from_csv(csv_file, lc_index, object_id, ra, dec)
-        produced = 0
-
-        for alert in alerts:
-            if args.limit > 0 and total >= args.limit:
-                break
-            # Serialize to raw Avro datum bytes
-            raw_avro = schema.serialize(alert)
-            # Prepend Confluent Schema Registry header: [0x00][schema_id 4B BE]
-            payload = SR_HEADER + raw_avro
-            producer.produce(args.topic, value=payload)
-            produced += 1
-            total += 1
-            if total % 100 == 0:
-                producer.poll(0)
-
-        print(f"{produced} alerts produced")
-        if args.limit > 0 and total >= args.limit:
-            print(f"Reached limit of {args.limit} alerts")
-            break
+    object_count = 0
+    with mp.Pool(
+        processes=args.workers,
+        initializer=_worker_init,
+        initargs=(SCHEMA_VERSION, SCHEMA_ID),
+    ) as pool:
+        for csv_path, object_id, payloads in pool.imap_unordered(_serialize_file, tasks):
+            if not payloads:
+                object_count += 1
+                continue
+            name = Path(csv_path).name
+            print(f"[{name}] object_id={object_id} {len(payloads)} alerts", flush=True)
+            for payload in payloads:
+                producer.produce(args.topic, value=payload)
+                total += 1
+                if total % 100 == 0:
+                    producer.poll(0)
+            object_count += 1
 
     producer.flush()
     print(f"\nDone. {total} alerts produced to '{args.topic}'")
