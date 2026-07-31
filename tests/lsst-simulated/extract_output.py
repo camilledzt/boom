@@ -139,13 +139,26 @@ def count_input_objects(broker: str, schema_version: str = "11.0") -> int:
 def build_target_lookup(data_dir: Path) -> dict[int, str]:
     """Return a mapping objectid → target_name using the data directory CSVs."""
     summary = pd.read_csv(data_dir / "summary.csv")
+
+    # New format: target_name is directly in summary.csv
+    if "target_name" in summary.columns:
+        lookup: dict[int, str] = {}
+        for csv_file in sorted(data_dir.glob("lightcurve_*.csv")):
+            lc_index = int(csv_file.stem.split("_")[-1])
+            row = summary[summary["i"] == lc_index]
+            if row.empty:
+                continue
+            object_id = lc_index if lc_index != 0 else lc_index + 1_000_000
+            lookup[object_id] = str(row["target_name"].iloc[0])
+        return lookup
+
+    # Old format: join with opsim_fields_index.csv
     opsim = pd.read_csv(
         data_dir / "opsim_fields_index.csv", usecols=["field_index", "target_name"]
     )
     merged = summary.merge(opsim, left_on="field_idx", right_on="field_index")
-
-    lookup: dict[int, str] = {}
-    for csv_file in sorted(data_dir.glob("lightcurve_LSSTlike_*.csv")):
+    lookup = {}
+    for csv_file in sorted(data_dir.glob("lightcurve_*.csv")):
         lc_index = int(csv_file.stem.split("_")[-1])
         row = merged[merged["i"] == lc_index]
         if row.empty:
