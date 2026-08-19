@@ -4,7 +4,10 @@ mod lsst;
 mod winter;
 mod ztf;
 
-pub use base::{count_messages, delete_topic, initialize_topic, AlertConsumer, AlertProducer};
+pub use base::{
+    consumer, count_messages, delete_topic, initialize_topic, subscription_window, AlertConsumer,
+    AlertProducer, StartDate,
+};
 pub use decam::{DecamAlertConsumer, DecamAlertProducer};
 pub use lsst::LsstAlertConsumer;
 pub use winter::{WinterAlertConsumer, WinterAlertProducer};

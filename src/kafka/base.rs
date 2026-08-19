@@ -9,7 +9,7 @@ use crate::{
     },
 };
 
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use indicatif::ProgressBar;
 use opentelemetry::{metrics::Counter, KeyValue};
@@ -17,7 +17,7 @@ use rdkafka::{
     admin::{AdminClient, AdminOptions, NewTopic, TopicReplication},
     client::DefaultClientContext,
     config::ClientConfig,
-    consumer::{BaseConsumer, Consumer},
+    consumer::{BaseConsumer, CommitMode, Consumer},
     error::{KafkaError, KafkaResult},
     message::Message,
     producer::{FutureProducer, FutureRecord, Producer},
@@ -396,9 +396,46 @@ pub enum ConsumerError {
     ConfigError(#[from] config::ConfigError),
 }
 
+/// UTC dates a date-partitioned survey should currently be subscribed to,
+/// oldest first: the day containing `timestamp` plus the preceding
+/// `window_days`.
+///
+/// The default of 1 keeps yesterday alongside today, because a survey night
+/// straddles UTC midnight and the tail of it would otherwise be dropped at
+/// rollover. Going wider is a deliberate, temporary act: upstream expires a
+/// topic's partitions while still advertising its name, so every extra day
+/// risks re-adding partitions that fail every poll (survivable — see
+/// `is_expired_partition` — but not free). Its intended use is catching up
+/// after an upstream outage, bounded by upstream retention.
+pub fn subscription_window(timestamp: i64, window_days: u64) -> Vec<chrono::NaiveDate> {
+    let today = chrono::DateTime::from_timestamp(timestamp, 0)
+        .map(|dt| dt.date_naive())
+        .unwrap_or_else(|| chrono::Utc::now().date_naive());
+    (0..=window_days)
+        .rev()
+        .filter_map(|days_back| today.checked_sub_days(chrono::Days::new(days_back)))
+        .collect()
+}
+
 #[async_trait::async_trait]
-pub trait AlertConsumer: Sized {
+pub trait AlertConsumer: Sized + Clone + Send + Sync + 'static {
+    /// Concrete topic name(s) for a specific date. Used by the producer side and
+    /// by the one-shot (`exit_on_eof`) drain path.
     fn topic_names(&self, timestamp: i64) -> Vec<String>;
+    /// Concrete topic names the long-running consumer subscribes to at
+    /// `timestamp`.
+    ///
+    /// Date-partitioned surveys return a bounded window (see
+    /// [`subscription_window`]); surveys with a single static topic (e.g. LSST)
+    /// return that literal name and ignore `timestamp`. The consumer re-invokes
+    /// this whenever the UTC date changes and re-subscribes to the result, which
+    /// is what makes rollover automatic.
+    ///
+    /// This deliberately returns literal names rather than a `^…` regex.
+    /// librdkafka expands a regex against every topic the cluster advertises,
+    /// which for a daily-topic survey is the entire history of past nights — a
+    /// set that grows without bound and is almost entirely expired.
+    fn subscription_topics(&self, timestamp: i64, window_days: u64) -> Vec<String>;
     fn output_queue(&self) -> String;
     fn survey(&self) -> &'static str;
     #[instrument(skip(self))]
@@ -425,7 +462,7 @@ pub trait AlertConsumer: Sized {
     async fn consume(
         &self,
         topics: Option<Vec<String>>,
-        timestamp: i64,
+        start: StartDate,
         kafka_config: Option<KafkaConsumerConfig>,
         n_threads: Option<usize>,
         max_in_queue: Option<usize>,
@@ -434,8 +471,26 @@ pub trait AlertConsumer: Sized {
     ) -> Result<(), ConsumerError> {
         let config = AppConfig::from_path(config_path)?;
         let survey = self.survey();
+        // Resolved once here, not per worker, so every thread agrees on the day
+        // even if they spawn either side of UTC midnight.
+        let timestamp = start.timestamp();
+        let follow_current_date = start.follows_clock();
 
-        let topics = topics.unwrap_or_else(|| self.topic_names(timestamp));
+        // Resolves the topics to subscribe to for a given instant. The consumer
+        // loop re-invokes this on every UTC-date rollover and re-subscribes, so
+        // new daily topics are picked up without a restart.
+        // exit_on_eof (tests/dev): target the concrete topic for the date.
+        let subscribe_to: Arc<dyn Fn(i64, u64) -> Vec<String> + Send + Sync> = match topics {
+            Some(overridden) => Arc::new(move |_, _| overridden.clone()),
+            None if exit_on_eof => {
+                let survey_consumer = self.clone();
+                Arc::new(move |at, _| survey_consumer.topic_names(at))
+            }
+            None => {
+                let survey_consumer = self.clone();
+                Arc::new(move |at, days| survey_consumer.subscription_topics(at, days))
+            }
+        };
         let kafka_config = match kafka_config {
             Some(cfg) => cfg,
             None => config
@@ -457,17 +512,18 @@ pub trait AlertConsumer: Sized {
 
         let mut handles = vec![];
         for i in 0..n_threads {
-            let topics = topics.clone();
+            let subscribe_to = subscribe_to.clone();
             let output_queue = self.output_queue();
             let config = config.clone();
             let kafka_config = kafka_config.clone();
             let handle = tokio::spawn(async move {
                 let result = consumer(
                     &i.to_string(),
-                    topics.iter().map(|s| s.as_str()).collect(),
+                    subscribe_to,
                     &output_queue,
                     max_in_queue,
                     timestamp,
+                    follow_current_date,
                     &config,
                     &kafka_config,
                     exit_on_eof,
@@ -548,14 +604,223 @@ fn seek_to_timestamp(consumer: &BaseConsumer, timestamp_ms: i64) -> KafkaResult<
     Ok(())
 }
 
+// Position the given `targets` partitions for the long-running consumer: those
+// with a committed offset resume from it; the rest are resolved by `timestamp_ms`
+// (an old day's topic has nothing at/after it -> seek to end/skip; today's and
+// any newly-created daily topic -> its start).
+fn position_partitions(
+    consumer: &BaseConsumer,
+    targets: &TopicPartitionList,
+    timestamp_ms: i64,
+) -> KafkaResult<()> {
+    if targets.count() == 0 {
+        return Ok(());
+    }
+    let committed = consumer.committed(KAFKA_TIMEOUT_SECS)?;
+
+    let mut to_resolve = TopicPartitionList::new();
+    for elem in targets.elements() {
+        match committed
+            .find_partition(elem.topic(), elem.partition())
+            .map(|c| c.offset())
+        {
+            Some(rdkafka::Offset::Offset(offset)) => {
+                consumer.seek(
+                    elem.topic(),
+                    elem.partition(),
+                    rdkafka::Offset::Offset(offset),
+                    KAFKA_TIMEOUT_SECS,
+                )?;
+            }
+            _ => {
+                to_resolve.add_partition_offset(
+                    elem.topic(),
+                    elem.partition(),
+                    rdkafka::Offset::Offset(timestamp_ms),
+                )?;
+            }
+        }
+    }
+
+    if to_resolve.count() == 0 {
+        return Ok(());
+    }
+    let resolved = consumer.offsets_for_times(to_resolve, KAFKA_TIMEOUT_SECS)?;
+    // Persist the resolved start/skip position for each uncommitted partition.
+    // With the default (eager) assignor, discovering the next day's topic revokes
+    // and reassigns everything; committing here means an old skipped topic resumes
+    // from its end (stays skipped) rather than resetting to `earliest` and
+    // replaying, and today's topic resumes from its start.
+    let mut to_commit = TopicPartitionList::new();
+    for elem in resolved.elements() {
+        let offset = match elem.offset() {
+            rdkafka::Offset::Offset(offset) => offset,
+            // No message at/after the timestamp (an old or empty topic): resolve
+            // the end offset numerically so it can be committed and skipped.
+            _ => {
+                consumer
+                    .fetch_watermarks(elem.topic(), elem.partition(), KAFKA_TIMEOUT_SECS)?
+                    .1
+            }
+        };
+        consumer.seek(
+            elem.topic(),
+            elem.partition(),
+            rdkafka::Offset::Offset(offset),
+            KAFKA_TIMEOUT_SECS,
+        )?;
+        to_commit.add_partition_offset(
+            elem.topic(),
+            elem.partition(),
+            rdkafka::Offset::Offset(offset),
+        )?;
+    }
+    if to_commit.count() > 0 {
+        consumer.commit(&to_commit, CommitMode::Sync)?;
+    }
+    Ok(())
+}
+
+// Position only partitions that have appeared in the assignment since the last
+// call, recording them in `positioned`. Positioning each partition exactly once
+// (rather than re-seeking the whole assignment whenever it changes) means a
+// still-active partition is never rewound to its lagging committed offset, and a
+// same-size membership swap (which a count check would miss) is still handled.
+// A genuinely-new daily topic is correctly picked up here; an old retained topic
+// re-assigned mid-run is skipped. (A brand-new partition consumed between poll
+// and this check would be rewound once here — a bounded, idempotent replay.)
+fn reposition_new_partitions(
+    consumer: &BaseConsumer,
+    timestamp_ms: i64,
+    positioned: &mut std::collections::HashSet<(String, i32)>,
+) -> KafkaResult<()> {
+    let assignment = consumer.assignment()?;
+    let mut fresh = TopicPartitionList::new();
+    for elem in assignment.elements() {
+        if !positioned.contains(&(elem.topic().to_string(), elem.partition())) {
+            fresh.add_partition_offset(elem.topic(), elem.partition(), rdkafka::Offset::Invalid)?;
+        }
+    }
+    if fresh.count() == 0 {
+        return Ok(());
+    }
+    position_partitions(consumer, &fresh, timestamp_ms)?;
+    for elem in fresh.elements() {
+        positioned.insert((elem.topic().to_string(), elem.partition()));
+    }
+    Ok(())
+}
+
+/// Where a consumer starts reading, and whether it advances with the clock.
+///
+/// The caller states which it wants rather than having it inferred from the
+/// timestamp. Inferring would get two cases wrong: a pinned run that happens to
+/// name today's date is still a pinned run, and a consumer started moments
+/// before UTC midnight would race the comparison.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartDate {
+    /// Begin at the current UTC day and roll onto each new daily topic as
+    /// midnight passes. What the long-running consumers use.
+    Current,
+    /// Pinned to one instant — replay, backfill, benchmarks. Never rolls over:
+    /// advancing it would unsubscribe the consumer from the very topic it was
+    /// started to read.
+    Pinned(i64),
+}
+
+impl StartDate {
+    /// Unix seconds that newly-assigned partitions are positioned to.
+    pub fn timestamp(self) -> i64 {
+        match self {
+            StartDate::Current => {
+                let now = chrono::Utc::now();
+                now.date_naive()
+                    .and_hms_opt(0, 0, 0)
+                    .map(|midnight| midnight.and_utc().timestamp())
+                    .unwrap_or_else(|| now.timestamp())
+            }
+            StartDate::Pinned(timestamp) => timestamp,
+        }
+    }
+
+    /// Whether the subscription should roll onto each new UTC day.
+    pub fn follows_clock(self) -> bool {
+        matches!(self, StartDate::Current)
+    }
+}
+
+/// UTC-midnight timestamp to roll onto, or `None` to stay put. Split out so the
+/// decision is testable without a broker.
+fn rollover_target(
+    follow_current_date: bool,
+    subscribed_date: chrono::NaiveDate,
+    today: chrono::NaiveDate,
+) -> Option<i64> {
+    if !follow_current_date || today == subscribed_date {
+        return None;
+    }
+    today
+        .and_hms_opt(0, 0, 0)
+        .map(|midnight| midnight.and_utc().timestamp())
+}
+
+/// Re-subscribe if the UTC date has rolled onto a new daily topic.
+///
+/// Must be called from both poll loops: a consumer started between nights never
+/// receives a first message, so it never leaves the initial-assignment loop.
+fn roll_subscription_if_needed(
+    consumer: &BaseConsumer,
+    subscribe_to: &Arc<dyn Fn(i64, u64) -> Vec<String> + Send + Sync>,
+    window_days: u64,
+    follow_current_date: bool,
+    subscribed_date: &mut chrono::NaiveDate,
+    position_timestamp: &mut i64,
+) {
+    let today = chrono::Utc::now().date_naive();
+    let Some(new_timestamp) = rollover_target(follow_current_date, *subscribed_date, today) else {
+        return;
+    };
+    let rolled = subscribe_to(new_timestamp, window_days);
+    let rolled_refs: Vec<&str> = rolled.iter().map(|s| s.as_str()).collect();
+    match consumer.subscribe(&rolled_refs) {
+        Ok(()) => {
+            info!(
+                "Rolled subscription from {} to {}, now subscribed to {:?}",
+                subscribed_date, today, rolled
+            );
+            *subscribed_date = today;
+            *position_timestamp = new_timestamp;
+        }
+        // Stay on the current subscription; the next check retries.
+        Err(error) => log_error!(error, "failed to roll subscription onto new day"),
+    }
+}
+
+/// Whether a poll error refers to a partition whose topic no longer exists
+/// upstream — typically an expired daily topic still present in the group's
+/// assignment. Unlike a transient broker error these never recover, so they
+/// must not be retried on the same backoff.
+fn is_expired_partition(error: &KafkaError) -> bool {
+    matches!(
+        error,
+        KafkaError::MessageConsumption(
+            rdkafka::error::RDKafkaErrorCode::UnknownTopicOrPartition
+                | rdkafka::error::RDKafkaErrorCode::UnknownTopic
+                | rdkafka::error::RDKafkaErrorCode::UnknownPartition
+        )
+    )
+}
+
 // No `#[instrument]` here: this function is the long-lived Kafka poll loop;
 // instrumenting it would funnel every per-message span into one giant trace.
 pub async fn consumer(
     id: &str,
-    topics: Vec<&str>,
+    subscribe_to: Arc<dyn Fn(i64, u64) -> Vec<String> + Send + Sync>,
     output_queue: &str,
     max_in_queue: usize,
     timestamp: i64,
+    // Whether to roll the subscription onto each new UTC day; see `StartDate`.
+    follow_current_date: bool,
     config: &AppConfig,
     survey_consumer_config: &KafkaConsumerConfig,
     exit_on_eof: bool,
@@ -566,10 +831,13 @@ pub async fn consumer(
     let username = survey_consumer_config.username.clone();
     let password = survey_consumer_config.password.clone();
 
-    let topics = if exit_on_eof {
-        // if exit_on_eof is true, let's only consume from the topics that have messages, and exit if they are all empty
+    let window_days = survey_consumer_config.subscription_window_days;
+    let subscription = subscribe_to(timestamp, window_days);
+
+    let topics: Vec<String> = if exit_on_eof {
+        // One-shot drain: keep only concrete topics that have messages, exit if none.
         let mut non_empty_topics = vec![];
-        for topic in &topics {
+        for topic in &subscription {
             let nb_messages = count_messages(&server, topic)?;
             match nb_messages {
                 Some(0) => {
@@ -583,7 +851,7 @@ pub async fn consumer(
                         "Topic {} has messages, including it for consumer {}",
                         topic, id
                     );
-                    non_empty_topics.push(*topic);
+                    non_empty_topics.push(topic.clone());
                 }
                 None => {
                     info!("Topic {} not found, skipping it for consumer {}", topic, id);
@@ -599,9 +867,9 @@ pub async fn consumer(
         }
         non_empty_topics
     } else {
-        // otherwise, we want to consume from all topics and never exit, even if they are empty at the beginning
-        debug!("exit_on_eof is false, consuming from all topics indefinitely");
-        topics
+        // Long-running: subscribe to the pattern(s); new daily topics roll over automatically.
+        debug!("exit_on_eof is false, consuming indefinitely");
+        subscription
     };
 
     let mut client_config = ClientConfig::new();
@@ -611,14 +879,24 @@ pub async fn consumer(
         .set("bootstrap.servers", &server)
         .set("group.id", &group_id)
         .set("auto.offset.reset", "earliest")
-        // Important: disable automatic offset storage so offsets
-        // can be manually controlled during the seek operation
+        // Manual offset storage so the bootstrap seek isn't clobbered; in the
+        // prod path we store offsets explicitly after each push (see below).
         .set("enable.auto.offset.store", "false");
 
-    if let (Some(username), Some(password)) = (
-        username.filter(|s| !s.is_empty()),
-        password.filter(|s| !s.is_empty()),
-    ) {
+    if !exit_on_eof {
+        // Long-running consumer: commit stored offsets so restarts and rebalances
+        // resume in place instead of replaying. We deliberately keep the default
+        // (eager) assignment strategy: switching a live consumer group to
+        // cooperative-sticky is an incompatible rebalance protocol, and members
+        // already in the group on the eager protocol reject the join with
+        // InconsistentGroupProtocol.
+        client_config
+            .set("enable.auto.commit", "true")
+            // How quickly a newly-created daily topic is discovered and joined.
+            .set("topic.metadata.refresh.interval.ms", "10000");
+    }
+
+    if let (Some(username), Some(password)) = (username, password) {
         client_config
             .set("security.protocol", "SASL_PLAINTEXT")
             .set("sasl.mechanisms", "SCRAM-SHA-512")
@@ -632,21 +910,69 @@ pub async fn consumer(
         .create()
         .inspect_err(as_error!("failed to create consumer"))?;
 
-    // Subscribe to topic(s) - broker will handle partition assignment
+    // Subscribe to topic(s)/pattern(s) - broker handles partition assignment.
+    let topic_refs: Vec<&str> = topics.iter().map(|s| s.as_str()).collect();
     consumer
-        .subscribe(&topics)
+        .subscribe(&topic_refs)
         .inspect_err(as_error!("failed to subscribe to topics"))?;
 
     // Wait for initial assignment
     debug!("Waiting for partition assignment...");
 
+    // Partitions already positioned (prod path only); see reposition_new_partitions.
+    let mut positioned: std::collections::HashSet<(String, i32)> = std::collections::HashSet::new();
+
+    // Declared here because the initial-assignment loop must roll over too.
+    const ROLLOVER_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
+    let mut last_rollover_check = std::time::Instant::now();
+    // Advance together on rollover, so a new topic starts at its own day.
+    let mut subscribed_date = chrono::DateTime::from_timestamp(timestamp, 0)
+        .map(|dt| dt.date_naive())
+        .unwrap_or_else(|| chrono::Utc::now().date_naive());
+    let mut position_timestamp = timestamp;
+
+    // Idle and wedged look identical at INFO otherwise.
+    const WAITING_LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+    let mut last_waiting_log = std::time::Instant::now();
+
     // Poll once to trigger rebalance and get assignment
     loop {
+        // This loop can sit across a UTC midnight; roll while waiting.
+        if !exit_on_eof && last_rollover_check.elapsed() >= ROLLOVER_CHECK_INTERVAL {
+            last_rollover_check = std::time::Instant::now();
+            roll_subscription_if_needed(
+                &consumer,
+                &subscribe_to,
+                window_days,
+                follow_current_date,
+                &mut subscribed_date,
+                &mut position_timestamp,
+            );
+            reposition_new_partitions(&consumer, position_timestamp * 1000, &mut positioned)?;
+        }
+        if !exit_on_eof && last_waiting_log.elapsed() >= WAITING_LOG_INTERVAL {
+            last_waiting_log = std::time::Instant::now();
+            info!(
+                "Consumer {} waiting for first message; subscribed for {} (idle between nights is normal)",
+                id, subscribed_date
+            );
+        }
         match consumer.poll(KAFKA_TIMEOUT_SECS) {
             Some(Ok(_msg)) => {
-                debug!("Received initial message, seeking to timestamp...");
-                // Now seek all assigned partitions to the target timestamp
-                seek_to_timestamp(&consumer, timestamp * 1000)?;
+                debug!("Got initial assignment, positioning partitions...");
+                if exit_on_eof {
+                    // One-shot drain: (re)read from the requested timestamp.
+                    seek_to_timestamp(&consumer, timestamp * 1000)?;
+                } else {
+                    // Resume committed partitions; skip old / start today otherwise.
+                    // position_timestamp, not timestamp: a rollover may have
+                    // advanced it while this loop waited for a first message.
+                    reposition_new_partitions(
+                        &consumer,
+                        position_timestamp * 1000,
+                        &mut positioned,
+                    )?;
+                }
                 break;
             }
             Some(Err(e)) => {
@@ -708,14 +1034,58 @@ pub async fn consumer(
         .await
         .inspect_err(as_error!("failed to connect to redis"))?;
 
-    let mut total = 0;
+    let mut total: u64 = 0;
     // start timer
     let start = std::time::Instant::now();
+
+    // Emit a periodic "still alive" line so low-volume surveys (e.g. WINTER,
+    // which may push far fewer than the every-1000 progress log) visibly report
+    // progress instead of looking stalled. Also confirms the loop is polling
+    // even when idle between nights.
+    const HEARTBEAT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+    let mut last_heartbeat = std::time::Instant::now();
+    let mut total_at_last_heartbeat: u64 = 0;
+
+    // Expired-partition poll errors repeat indefinitely, so they get a short
+    // backoff (enough to keep the loop off a hot spin) and a throttled log.
+    const EXPIRED_POLL_BACKOFF: std::time::Duration = std::time::Duration::from_millis(100);
+    const EXPIRED_LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(300);
+    let mut last_expired_log = std::time::Instant::now()
+        .checked_sub(EXPIRED_LOG_INTERVAL)
+        .unwrap_or_else(std::time::Instant::now);
 
     debug!("Starting Kafka consumer loop...");
 
     // Process the rest normally
     loop {
+        if !exit_on_eof && last_heartbeat.elapsed() >= HEARTBEAT_INTERVAL {
+            let since = total - total_at_last_heartbeat;
+            info!(
+                "Consumer {} alive: {} messages pushed to '{}' ({} in the last {:?}, {:?} total)",
+                id,
+                total,
+                output_queue,
+                since,
+                last_heartbeat.elapsed(),
+                start.elapsed(),
+            );
+            last_heartbeat = std::time::Instant::now();
+            total_at_last_heartbeat = total;
+        }
+        // Roll the subscription onto the current UTC day, then pick up any
+        // newly-assigned partitions (the new day's topic, or a rebalance).
+        if !exit_on_eof && last_rollover_check.elapsed() >= ROLLOVER_CHECK_INTERVAL {
+            last_rollover_check = std::time::Instant::now();
+            roll_subscription_if_needed(
+                &consumer,
+                &subscribe_to,
+                window_days,
+                follow_current_date,
+                &mut subscribed_date,
+                &mut position_timestamp,
+            );
+            reposition_new_partitions(&consumer, position_timestamp * 1000, &mut positioned)?;
+        }
         if max_in_queue > 0 && total % 1000 == 0 {
             loop {
                 let nb_in_queue = con
@@ -743,6 +1113,13 @@ pub async fn consumer(
                         ALERT_PROCESSED.add(1, &output_error_attrs);
                     })?;
                 trace!("Pushed message to redis");
+                // Mark processed so the periodic auto-commit advances the offset
+                // (only the prod path commits; the drain path never stores).
+                if !exit_on_eof {
+                    if let Err(error) = consumer.store_offset_from_message(&message) {
+                        log_error!(error, "failed to store offset");
+                    }
+                }
                 ALERT_PROCESSED.add(1, &ok_attrs);
                 total += 1;
                 if total % 1000 == 0 {
@@ -758,8 +1135,27 @@ pub async fn consumer(
                 }
             }
             Some(Err(e)) => {
-                error!("Error while consuming from Kafka, retrying: {}", e);
                 ALERT_PROCESSED.add(1, &input_error_attrs);
+                // A partition whose topic has expired upstream fails on every
+                // poll and never recovers. Serving each one a full second of
+                // backoff turns this loop into a treadmill: once enough expired
+                // partitions are in the assignment the consumer can no longer
+                // drain the live topic, and it never reaches the idle branch
+                // below — which is where rollover would otherwise be noticed.
+                // Log sparsely and keep polling instead.
+                if is_expired_partition(&e) {
+                    if last_expired_log.elapsed() >= EXPIRED_LOG_INTERVAL {
+                        last_expired_log = std::time::Instant::now();
+                        warn!(
+                            "Polling a partition whose topic no longer exists upstream \
+                             (subscribed date {}): {}",
+                            subscribed_date, e
+                        );
+                    }
+                    tokio::time::sleep(EXPIRED_POLL_BACKOFF).await;
+                    continue;
+                }
+                error!("Error while consuming from Kafka, retrying: {}", e);
                 tokio::time::sleep(core::time::Duration::from_secs(1)).await;
                 continue;
             }
@@ -769,9 +1165,58 @@ pub async fn consumer(
                     info!("No more messages, exiting consumer {}", id);
                     break;
                 }
+                // Idle: catch a topic that has just rolled over.
+                reposition_new_partitions(&consumer, position_timestamp * 1000, &mut positioned)?;
             }
         }
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod rollover_tests {
+    use super::*;
+
+    fn d(y: i32, m: u32, day: u32) -> chrono::NaiveDate {
+        chrono::NaiveDate::from_ymd_opt(y, m, day).unwrap()
+    }
+
+    #[test]
+    fn test_rolls_onto_a_new_utc_day() {
+        let target = rollover_target(true, d(2026, 8, 13), d(2026, 8, 14))
+            .expect("a new day must produce a rollover target");
+        assert_eq!(target % 86_400, 0, "targets UTC midnight");
+        assert_eq!(
+            chrono::DateTime::from_timestamp(target, 0)
+                .unwrap()
+                .date_naive(),
+            d(2026, 8, 14)
+        );
+    }
+
+    #[test]
+    fn test_no_roll_within_the_same_day() {
+        assert!(rollover_target(true, d(2026, 8, 14), d(2026, 8, 14)).is_none());
+    }
+
+    // A pinned run (replay, backfill, benchmark) must never chase the clock.
+    #[test]
+    fn test_pinned_run_never_rolls() {
+        assert!(rollover_target(false, d(2025, 3, 11), d(2026, 8, 14)).is_none());
+    }
+
+    // A stale subscription rolls all the way to today, not one day forward.
+    #[test]
+    fn test_rolls_across_a_multi_day_gap() {
+        let target = rollover_target(true, d(2026, 8, 12), d(2026, 8, 14))
+            .expect("a stale subscription must roll forward however far behind it is");
+        assert_eq!(
+            chrono::DateTime::from_timestamp(target, 0)
+                .unwrap()
+                .date_naive(),
+            d(2026, 8, 14),
+            "rolls to today, not merely one day forward"
+        );
+    }
 }

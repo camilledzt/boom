@@ -1,11 +1,12 @@
 use crate::{
-    kafka::base::{AlertConsumer, AlertProducer},
+    kafka::base::{subscription_window, AlertConsumer, AlertProducer},
     utils::{data::count_files_in_dir, enums::Survey},
 };
 use tracing::info;
 
 const WINTER_DEFAULT_NB_PARTITIONS: usize = 15;
 
+#[derive(Clone)]
 pub struct WinterAlertConsumer {
     output_queue: String,
 }
@@ -26,6 +27,15 @@ impl AlertConsumer for WinterAlertConsumer {
         // As of 2022-08-01 the upstream WINTER naming convention is `winter_%Y%m%d`.
         let date = chrono::DateTime::from_timestamp(timestamp, 0).unwrap();
         vec![format!("winter_{}", date.format("%Y%m%d"))]
+    }
+    fn subscription_topics(&self, timestamp: i64, window_days: u64) -> Vec<String> {
+        // Concrete names over the rollover window rather than a `^winter_[0-9]+$`
+        // regex: a pattern also matches every past night the cluster still
+        // advertises, whose partitions have already been expired upstream.
+        subscription_window(timestamp, window_days)
+            .iter()
+            .map(|date| format!("winter_{}", date.format("%Y%m%d")))
+            .collect()
     }
     fn output_queue(&self) -> String {
         self.output_queue.clone()
