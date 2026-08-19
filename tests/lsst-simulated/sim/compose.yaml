@@ -1,0 +1,116 @@
+# Per-simulation stack. Requires the shared infra (infra/compose.yaml) to be running.
+# All services join the boom-sim-infra Docker network so they can reach broker/mongo/valkey.
+#
+# Required env vars (set by run.py):
+#   BOOM_REPO_ROOT   – absolute path to the boom repository
+#   SIM_ID           – simulation identifier (e.g. cdo_20260819_1430)
+#   SIM_CONFIG_PATH  – absolute path to the generated per-sim config.yaml
+#   DATA_DIR_HOST    – absolute path to the lightcurve data directory
+#   FILTER_FILE      – absolute path to the filter JSON file
+#   PRODUCER_LIMIT   – max objects to produce (0 = no limit)
+
+networks:
+  boom:
+    external: true
+    name: boom-sim-infra
+
+services:
+  mongo-init:
+    image: mongo:8.0
+    networks:
+      - boom
+    volumes:
+      - ${BOOM_REPO_ROOT:?Variable not set}/tests/lsst-simulated/mongo-init.sh:/mongo-init.sh
+    environment:
+      - DB_NAME=${SIM_DB_NAME:?Variable not set}
+      - MONGO_INITDB_ROOT_USERNAME=mongoadmin
+      - MONGO_INITDB_ROOT_PASSWORD=mongoadminsecret
+    entrypoint: ["/bin/bash", "/mongo-init.sh"]
+
+  add-filter:
+    image: boom-astro/boom:latest
+    build:
+      dockerfile: ${BOOM_REPO_ROOT:?Variable not set}/Dockerfile
+      context: ${BOOM_REPO_ROOT:?Variable not set}
+      pull: false
+    networks:
+      - boom
+    entrypoint: ["/app/add_filter", "lsst", "lsst-simulated-filter", "/filter.json"]
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+    volumes:
+      - ${SIM_CONFIG_PATH:?Variable not set}:/app/config.yaml
+      - ${FILTER_FILE:?Variable not set}:/filter.json:ro
+
+  producer:
+    image: python:3.13-slim
+    hostname: producer
+    networks:
+      - boom
+    depends_on:
+      - add-filter
+    volumes:
+      - ${BOOM_REPO_ROOT:?Variable not set}/scripts/produce-lsst-simulated.py:/produce-lsst-simulated.py
+      - ${DATA_DIR_HOST:?Variable not set}:/data_alex
+    environment:
+      - DATA_DIR=/data_alex
+      - PRODUCER_LIMIT=${PRODUCER_LIMIT:-0}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        pip install --quiet lsst-alert-packet confluent-kafka numpy pandas && \
+        python /produce-lsst-simulated.py \
+          --broker broker:29092 \
+          --topic alerts-simulated_${SIM_ID} \
+          --data-dir /data_alex \
+          --reset \
+          ${PRODUCER_LIMIT:+--limit $PRODUCER_LIMIT} \
+          ${PRODUCER_WORKERS:+--workers $PRODUCER_WORKERS}
+
+  consumer:
+    image: boom-astro/boom:latest
+    build:
+      dockerfile: ${BOOM_REPO_ROOT:?Variable not set}/Dockerfile
+      context: ${BOOM_REPO_ROOT:?Variable not set}
+      pull: false
+    networks:
+      - boom
+    command: ["/bin/sh", "-c", "sleep 5 && /app/kafka_consumer lsst --simulated"]
+    environment:
+      RUST_LOG: debug,ort=error
+      BOOM_KAFKA__CONSUMER__LSST__USERNAME: ""
+      BOOM_KAFKA__CONSUMER__LSST__PASSWORD: ""
+      OTEL_SDK_DISABLED: "true"
+      BOOM_SIM_ID: ${SIM_ID:?Variable not set}
+    depends_on:
+      producer:
+        condition: service_completed_successfully
+    volumes:
+      - ${SIM_CONFIG_PATH:?Variable not set}:/app/config.yaml
+
+  scheduler:
+    image: boom-astro/boom:latest
+    build:
+      dockerfile: ${BOOM_REPO_ROOT:?Variable not set}/Dockerfile
+      context: ${BOOM_REPO_ROOT:?Variable not set}
+      pull: false
+    command:
+      - /app/scheduler
+      - lsst
+    environment:
+      RUST_LOG: debug,ort=error
+      BOOM_GPU__ENABLED: "false"
+      OTEL_SDK_DISABLED: "true"
+      BOOM_SIM_ID: ${SIM_ID:?Variable not set}
+    networks:
+      - boom
+    depends_on:
+      producer:
+        condition: service_completed_successfully
+      add-filter:
+        condition: service_completed_successfully
+    volumes:
+      - ${SIM_CONFIG_PATH:?Variable not set}:/app/config.yaml
+      - ${BOOM_REPO_ROOT:?Variable not set}/data/models:/app/data/models:ro
+      - ${BOOM_REPO_ROOT:?Variable not set}/data/ls_footprint_moc.fits:/app/data/ls_footprint_moc.fits:ro

@@ -10,9 +10,8 @@ pub struct LsstAlertConsumer {
 impl LsstAlertConsumer {
     #[instrument]
     pub fn new(output_queue: Option<&str>, simulated: bool) -> Self {
-        let output_queue = output_queue
-            .unwrap_or("LSST_alerts_packets_queue")
-            .to_string();
+        let base = output_queue.unwrap_or("LSST_alerts_packets_queue");
+        let output_queue = sim_suffix(base);
 
         LsstAlertConsumer {
             output_queue,
@@ -21,11 +20,19 @@ impl LsstAlertConsumer {
     }
 }
 
+/// Appends `_{BOOM_SIM_ID}` to `name` when the env var is set and non-empty.
+pub(crate) fn sim_suffix(name: &str) -> String {
+    match std::env::var("BOOM_SIM_ID").ok().filter(|s| !s.is_empty()) {
+        Some(id) => format!("{}_{}", name, id),
+        None => name.to_string(),
+    }
+}
+
 #[async_trait::async_trait]
 impl AlertConsumer for LsstAlertConsumer {
     fn topic_names(&self, _timestamp: i64) -> Vec<String> {
         if self.simulated {
-            vec!["alerts-simulated".to_string()]
+            vec![sim_suffix("alerts-simulated")]
         } else {
             vec!["lsst-alerts-v11".to_string()]
         }

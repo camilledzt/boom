@@ -80,7 +80,8 @@ def jd_to_mjd(jd: float) -> float:
     return jd - 2400000.5
 
 
-def read_passing_alerts(broker: str) -> dict[str, list[dict]]:
+def read_passing_alerts(broker: str, sim_id: str | None) -> dict[str, list[dict]]:
+    topic = f"LSST_alerts_results_{sim_id}" if sim_id else "LSST_alerts_results"
     consumer = Consumer(
         {
             "bootstrap.servers": broker,
@@ -88,7 +89,7 @@ def read_passing_alerts(broker: str) -> dict[str, list[dict]]:
             "auto.offset.reset": "earliest",
         }
     )
-    consumer.subscribe(["LSST_alerts_results"])
+    consumer.subscribe([topic])
 
     alerts_by_object: dict[str, list[dict]] = collections.defaultdict(list)
     while True:
@@ -105,8 +106,9 @@ def read_passing_alerts(broker: str) -> dict[str, list[dict]]:
     return alerts_by_object
 
 
-def count_input_objects(broker: str, schema_version: str = "11.0") -> int:
+def count_input_objects(broker: str, sim_id: str | None, schema_version: str = "11.0") -> int:
     """Count distinct diaObjectId values in the alerts-simulated topic."""
+    topic = f"alerts-simulated_{sim_id}" if sim_id else "alerts-simulated"
     sr = packet.SchemaRegistry.from_filesystem()
     schema = sr.get_by_version(schema_version)
 
@@ -117,7 +119,7 @@ def count_input_objects(broker: str, schema_version: str = "11.0") -> int:
             "auto.offset.reset": "earliest",
         }
     )
-    consumer.subscribe(["alerts-simulated"])
+    consumer.subscribe([topic])
 
     object_ids: set[int] = set()
     while True:
@@ -182,6 +184,11 @@ def main() -> None:
     parser.add_argument(
         "--data-dir", default=None, help="Path to data directory for target_name lookup"
     )
+    parser.add_argument(
+        "--sim-id",
+        default=None,
+        help="Simulation ID (e.g. cdo_20260819_1430). Reads from the sim-scoped Kafka topics.",
+    )
     args = parser.parse_args()
 
     target_lookup: dict[int, str] = {}
@@ -190,12 +197,16 @@ def main() -> None:
         target_lookup = build_target_lookup(Path(args.data_dir))
         print(f"  Loaded {len(target_lookup)} object→target mappings")
 
+    sim_id: str | None = args.sim_id
+    if sim_id:
+        print(f"Simulation ID: {sim_id}")
+
     print("Reading filter results from Kafka...")
-    alerts_by_object = read_passing_alerts(args.broker)
+    alerts_by_object = read_passing_alerts(args.broker, sim_id)
     n_passing = len(alerts_by_object)
 
     print("Counting total input objects from alerts-simulated topic...")
-    n_total = count_input_objects(args.broker)
+    n_total = count_input_objects(args.broker, sim_id)
 
     pct = 100.0 * n_passing / n_total if n_total > 0 else 0.0
     print(f"\nFilter efficiency: {n_passing} / {n_total} objects passed ({pct:.1f}%)\n")

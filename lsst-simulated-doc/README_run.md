@@ -198,7 +198,133 @@ logs/lsst-simulated/scheduler.log
 
 ---
 
+## Multi-simulation in parallel
+
+Multiple users can run simulations at the same time on the same VM. The infrastructure
+(Kafka broker, MongoDB, Valkey) is shared and runs as a single long-lived stack. Each
+simulation gets its own isolated namespace so runs never interfere.
+
+### How the isolation works
+
+The simulation ID (`sim_id`) is generated automatically at launch as:
+
+```
+{nickname}_{YYYYMMDD}_{HHMM}      e.g.  cdo_20260819_1430
+```
+
+If no nickname is given, it is just `{YYYYMMDD}_{HHMM}`. Every resource in the pipeline
+is scoped to this ID:
+
+| Resource | Naming |
+|---|---|
+| Kafka input topic | `alerts-simulated_{sim_id}` |
+| Redis queues | `LSST_alerts_*_queue_{sim_id}` |
+| Kafka results topic | `LSST_alerts_results_{sim_id}` |
+| MongoDB database | `boom-simu-{sim_id}` |
+| Kafka consumer group | `lsst-simulated-{sim_id}` |
+| Docker Compose project | `boom-sim-{sim_id}` |
+| Per-sim config file | `tests/lsst-simulated/sims/config-{sim_id}.yaml` |
+| Logs | `logs/lsst-simulated/{sim_id}/` |
+
+### Start the shared infrastructure (once per VM session)
+
+The broker, MongoDB, and Valkey only need to be started once and stay up across all
+simulations and all users:
+
+```bash
+BOOM_REPO_ROOT=$(pwd) docker compose -f tests/lsst-simulated/infra/compose.yaml up -d --wait
+```
+
+> `run.py` does this automatically and idempotently, so you only need to run this manually
+> if you want to pre-warm the infra before launching simulations.
+
+To stop the shared infra (this destroys all simulation databases):
+
+```bash
+docker compose -f tests/lsst-simulated/infra/compose.yaml down --volumes
+```
+
+### Running simulations in parallel
+
+Each user runs `run.py` with their own nickname from their own terminal:
+
+```bash
+# Terminal 1 — user cdo
+BOOM_REPO_ROOT=$(pwd) uv run tests/lsst-simulated/run.py \
+    --nickname cdo \
+    --boom-repo-dir . \
+    --data-dir /path/to/dataset_cdo \
+    --keep-up
+
+# Terminal 2 — user alexm
+BOOM_REPO_ROOT=$(pwd) uv run tests/lsst-simulated/run.py \
+    --nickname alexm \
+    --boom-repo-dir . \
+    --data-dir /path/to/dataset_alexm \
+    --keep-up
+```
+
+Both simulations share the same Kafka broker, MongoDB server, and Valkey, but each
+writes to completely separate topics, queues, and databases.
+
+The `--nickname` flag is optional:
+
+```bash
+BOOM_REPO_ROOT=$(pwd) uv run tests/lsst-simulated/run.py --boom-repo-dir . --data-dir /path/to/dataset
+# sim_id will be e.g. 20260819_1430
+```
+
+### Extracting results from a specific simulation
+
+Pass `--sim-id` to `extract_output.py` to read from that simulation's Kafka topic:
+
+```bash
+uv run tests/lsst-simulated/extract_output.py \
+    --broker localhost:9092 \
+    --sim-id cdo_20260819_1430 \
+    --data-dir /path/to/dataset \
+    --photometry-out photometry_cdo.csv \
+    --stats-out stats_cdo.csv
+```
+
+Without `--sim-id`, it reads the default (non-scoped) topic — useful for single-user runs.
+
+### Stopping a specific simulation
+
+```bash
+docker compose -p boom-sim-cdo_20260819_1430 -f tests/lsst-simulated/sim/compose.yaml down --volumes
+```
+
+### Inspecting a simulation's database
+
+Connect to the shared MongoDB and switch to the simulation's database:
+
+```bash
+docker compose -f tests/lsst-simulated/infra/compose.yaml exec mongo \
+  mongosh "mongodb://mongoadmin:mongoadminsecret@localhost:27017/boom-simu-cdo_20260819_1430?authSource=admin"
+```
+
+List all simulation databases currently in MongoDB:
+
+```bash
+docker compose -f tests/lsst-simulated/infra/compose.yaml exec mongo \
+  mongosh "mongodb://mongoadmin:mongoadminsecret@localhost:27017" \
+  --quiet \
+  --eval "db.adminCommand('listDatabases').databases.map(d => d.name).filter(n => n.startsWith('boom-simu'))"
+```
+
+### Logs per simulation
+
+Each simulation streams its logs to its own directory:
+
+```
+logs/lsst-simulated/cdo_20260819_1430/producer.log
+logs/lsst-simulated/cdo_20260819_1430/consumer.log
+logs/lsst-simulated/cdo_20260819_1430/scheduler.log
+```
+
+---
+
 ## Future steps
 
 - Input files can also handle parquet files
-- Multi simulations in parallel
