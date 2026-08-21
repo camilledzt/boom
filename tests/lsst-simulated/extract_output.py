@@ -209,7 +209,7 @@ def main() -> None:
         stats_w = csv.DictWriter(stats_f, fieldnames=STATS_COLS)
         stats_w.writeheader()
 
-        for object_id, msgs in sorted(alerts_by_object.items()):
+        for object_id, msgs in sorted(alerts_by_object.items(), key=lambda x: int(x[0])):
             # Map jd → candid for every detection that triggered a filter pass
             passing: dict[float, int] = {m["jd"]: m["candid"] for m in msgs}
 

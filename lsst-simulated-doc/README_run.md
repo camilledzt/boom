@@ -196,6 +196,30 @@ logs/lsst-simulated/consumer.log
 logs/lsst-simulated/scheduler.log
 ```
 
+### Check expected alert count (if run.py output was lost)
+
+```bash
+grep -i "expected\|alerts" logs/lsst-simulated/producer.log | head -20
+```
+
+### Check pipeline progress
+
+Alerts ingested into MongoDB:
+
+```bash
+BOOM_REPO_ROOT=$(pwd) docker compose -f tests/lsst-simulated/compose.yaml exec -T mongo \
+    mongosh "mongodb://mongoadmin:mongoadminsecret@localhost:27017" --quiet \
+    --eval "db.getSiblingDB('boom-lsst-simulated').LSST_alerts.countDocuments()"
+```
+
+Alerts fully enriched (pipeline complete when this equals expected count):
+
+```bash
+BOOM_REPO_ROOT=$(pwd) docker compose -f tests/lsst-simulated/compose.yaml exec -T mongo \
+    mongosh "mongodb://mongoadmin:mongoadminsecret@localhost:27017" --quiet \
+    --eval "db.getSiblingDB('boom-lsst-simulated').LSST_alerts.countDocuments({ properties: { \$exists: true } })"
+```
+
 ---
 
 ## Future steps
