@@ -1321,14 +1321,14 @@ impl AlertWorker for LsstAlertWorker {
     }
 
     fn input_queue_name(&self) -> String {
-        crate::kafka::lsst::sim_suffix(&format!(
+        crate::kafka::sim_suffix(&format!(
             "{}_alerts_packets_queue",
             LsstAlertWorker::survey()
         ))
     }
 
     fn output_queue_name(&self) -> String {
-        crate::kafka::lsst::sim_suffix(&format!(
+        crate::kafka::sim_suffix(&format!(
             "{}_alerts_enrichment_queue",
             LsstAlertWorker::survey()
         ))

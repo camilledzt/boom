@@ -452,8 +452,8 @@ impl FilterWorker for LsstFilterWorker {
         let filter_collection = db.collection("filters");
         let alert_cutout_storage = config.build_cutout_storage(&Survey::Lsst).await?;
 
-        let input_queue = crate::kafka::lsst::sim_suffix("LSST_alerts_filter_queue");
-        let output_topic = crate::kafka::lsst::sim_suffix("LSST_alerts_results");
+        let input_queue = crate::kafka::sim_suffix("LSST_alerts_filter_queue");
+        let output_topic = crate::kafka::sim_suffix("LSST_alerts_results");
 
         let watchlist_projections = watchlist_projections(&config, &Survey::Lsst);
         let filters = build_loaded_filters(

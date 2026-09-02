@@ -226,8 +226,8 @@ impl EnrichmentWorker for LsstEnrichmentWorker {
         let client = db.client().clone();
         let alert_collection = db.collection("LSST_alerts");
 
-        let input_queue = crate::kafka::lsst::sim_suffix("LSST_alerts_enrichment_queue");
-        let output_queue = crate::kafka::lsst::sim_suffix("LSST_alerts_filter_queue");
+        let input_queue = crate::kafka::sim_suffix("LSST_alerts_enrichment_queue");
+        let output_queue = crate::kafka::sim_suffix("LSST_alerts_filter_queue");
 
         // Detect if Babamul is enabled from the config
         let babamul_enabled = config.babamul.enabled;

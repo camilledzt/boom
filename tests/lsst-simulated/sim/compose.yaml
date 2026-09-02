@@ -22,7 +22,7 @@ services:
     volumes:
       - ${BOOM_REPO_ROOT:?Variable not set}/tests/lsst-simulated/mongo-init.sh:/mongo-init.sh
     environment:
-      - DB_NAME=${SIM_DB_NAME:?Variable not set}
+      - DB_NAME=${SIM_DB_NAME:-}
       - MONGO_INITDB_ROOT_USERNAME=mongoadmin
       - MONGO_INITDB_ROOT_PASSWORD=mongoadminsecret
     entrypoint: ["/bin/bash", "/mongo-init.sh"]
@@ -40,8 +40,8 @@ services:
       mongo-init:
         condition: service_completed_successfully
     volumes:
-      - ${SIM_CONFIG_PATH:?Variable not set}:/app/config.yaml
-      - ${FILTER_FILE:?Variable not set}:/filter.json:ro
+      - ${SIM_CONFIG_PATH:-/dev/null}:/app/config.yaml
+      - ${FILTER_FILE:-/dev/null}:/filter.json:ro
 
   producer:
     image: python:3.13-slim
@@ -52,7 +52,7 @@ services:
       - add-filter
     volumes:
       - ${BOOM_REPO_ROOT:?Variable not set}/scripts/produce-lsst-simulated.py:/produce-lsst-simulated.py
-      - ${DATA_DIR_HOST:?Variable not set}:/data_alex
+      - ${DATA_DIR_HOST:-/tmp}:/data_alex
     environment:
       - DATA_DIR=/data_alex
       - PRODUCER_LIMIT=${PRODUCER_LIMIT:-0}
@@ -62,7 +62,7 @@ services:
         pip install --quiet lsst-alert-packet confluent-kafka numpy pandas && \
         python /produce-lsst-simulated.py \
           --broker broker:29092 \
-          --topic alerts-simulated_${SIM_ID} \
+          --topic alerts-simulated_${SIM_ID:-default} \
           --data-dir /data_alex \
           --reset \
           ${PRODUCER_LIMIT:+--limit $PRODUCER_LIMIT} \
@@ -79,15 +79,13 @@ services:
     command: ["/bin/sh", "-c", "sleep 5 && /app/kafka_consumer lsst --simulated"]
     environment:
       RUST_LOG: debug,ort=error
-      BOOM_KAFKA__CONSUMER__LSST__USERNAME: ""
-      BOOM_KAFKA__CONSUMER__LSST__PASSWORD: ""
       OTEL_SDK_DISABLED: "true"
-      BOOM_SIM_ID: ${SIM_ID:?Variable not set}
+      BOOM_SIM_ID: ${SIM_ID:-}
     depends_on:
       producer:
         condition: service_completed_successfully
     volumes:
-      - ${SIM_CONFIG_PATH:?Variable not set}:/app/config.yaml
+      - ${SIM_CONFIG_PATH:-/dev/null}:/app/config.yaml
 
   scheduler:
     image: boom-astro/boom:latest
@@ -102,7 +100,7 @@ services:
       RUST_LOG: debug,ort=error
       BOOM_GPU__ENABLED: "false"
       OTEL_SDK_DISABLED: "true"
-      BOOM_SIM_ID: ${SIM_ID:?Variable not set}
+      BOOM_SIM_ID: ${SIM_ID:-}
     networks:
       - boom
     depends_on:
@@ -111,6 +109,6 @@ services:
       add-filter:
         condition: service_completed_successfully
     volumes:
-      - ${SIM_CONFIG_PATH:?Variable not set}:/app/config.yaml
+      - ${SIM_CONFIG_PATH:-/dev/null}:/app/config.yaml
       - ${BOOM_REPO_ROOT:?Variable not set}/data/models:/app/data/models:ro
       - ${BOOM_REPO_ROOT:?Variable not set}/data/ls_footprint_moc.fits:/app/data/ls_footprint_moc.fits:ro

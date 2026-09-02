@@ -140,46 +140,68 @@ extract filter results into CSV files:
 ```bash
 uv run tests/lsst-simulated/extract_output.py \
     --broker localhost:9092 \
+    --sim-id cdo_20260819_143022 \
     --data-dir /path/to/dataset \
-    --photometry-out photometry.csv \
-    --stats-out stats.csv
+    --limit 200
 ```
 
-This reads the `LSST_alerts_results` Kafka topic and writes:
+Output files are written to `results/<sim-id>/`:
+
+```
+results/cdo_20260819_143022/
+  photometry.csv
+  stats.csv
+```
 
 | File | Description |
 |---|---|
-| `photometry.csv` | One row per detection for every object that passed the filter. `passed_filter=True` marks the detection that triggered the pass. Columns: `object_id`, `candid`, `jd`, `mjd`, `band`, `flux_njy`, `flux_err_njy`, `mag`, `mag_err`, `passed_filter` |
-| `stats.csv` | One row per passing object with aggregate statistics and filter efficiency. Columns: `object_id`, `target_name`, `ra`, `dec`, `n_detections`, `n_passed_filter`, `filter_names`, `first_jd`, `last_jd` |
+| `photometry.csv` | **One row per passing alert** (one per detection that triggered the filter). Every row has a valid `candid` taken directly from the Kafka message. Columns: `object_id`, `candid`, `jd`, `mjd`, `band`, `flux_njy`, `flux_err_njy`, `mag`, `mag_err` |
+| `stats.csv` | One row per passing object. Columns: `object_id`, `target_name`, `ra`, `dec`, `n_detections`, `n_passed_filter`, `filter_names`, `first_jd`, `last_jd` |
 
-`--data-dir` is optional but recommended: it adds the `target_name` field from `summary.csv`
-to `stats.csv`.
+`photometry.csv` contains **only** the detections that passed — not the full photometry history. The complete lightcurve (all detections, all bands) is loaded from `--data-dir` when plotting.
 
-> Requires `confluent-kafka`, `fastavro`, `lsst-alert-packet` and the broker port exposed
-> (`ports: - "9092:9092"` in `compose.yaml` broker service).
+**`--sim-id`** selects the scoped Kafka output topic (`LSST_alerts_results_{sim_id}`). If omitted, reads from the unsuffixed topic (production mode).
+
+**`--limit`** must match the `--limit` value passed to `run.py` — it is used to count total input objects from `--data-dir` and compute filter efficiency correctly.
+
+**`--data-dir`** is optional but recommended: it adds `target_name` from `summary.csv` to `stats.csv` and enables the object count.
+
+**`--output-dir`** overrides the default output directory if needed.
+
+> Requires `confluent-kafka`, `fastavro` and the broker port exposed
+> (`ports: - "9092:9092"` in `infra/compose.yaml` broker service).
 
 After extraction, tear down the stack:
 
 ```bash
-BOOM_REPO_ROOT=$(pwd) docker compose -f tests/lsst-simulated/compose.yaml down -v
+docker compose -p boom-sim-cdo_20260819_143022 -f tests/lsst-simulated/sim/compose.yaml down --volumes
 ```
 
 ---
 
 ## 6. Analyse results
 
-Plot lightcurves:
+### Plot lightcurves
 
 ```bash
 uv run tests/lsst-simulated/plot_lightcurves.py \
-    --photometry photometry.csv \
-    --output-dir plots/
+    --sim-id cdo_20260819_143022 \
+    --data-dir /path/to/dataset \
+    --limit 200
 ```
 
-Check filter pass rate in scheduler logs:
+Reads `results/<sim-id>/photometry.csv` and `stats.csv` automatically and writes plots to `plots/<sim-id>/`.
+
+The full lightcurve for each object (all detections, all bands) is loaded from `--data-dir`. Passing detections (from `photometry.csv`) are highlighted in black/yellow; the rest are shown as background points.
+
+- **Passing objects** → `{object_id}.png`, title includes `target_name` and filter names
+- **Rejected objects** → `{object_id}_rejected.png`, no highlights
+- `--limit` must match the value used in `run.py`
+
+### Check filter pass rate
 
 ```bash
-grep -E "passed|sent total" logs/lsst-simulated/scheduler.log
+grep -E "passed|sent total" logs/lsst-simulated/cdo_20260819_143022/scheduler.log
 ```
 
 `Successfully sent total of X/Y` — X alerts sent to Kafka, Y passed the filter pipeline.
@@ -209,7 +231,7 @@ simulation gets its own isolated namespace so runs never interfere.
 The simulation ID (`sim_id`) is generated automatically at launch as:
 
 ```
-{nickname}_{YYYYMMDD}_{HHMM}      e.g.  cdo_20260819_1430
+{nickname}_{YYYYMMDD}_{HHMMSS}      e.g.  cdo_20260819_143022
 ```
 
 If no nickname is given, it is just `{YYYYMMDD}_{HHMM}`. Every resource in the pipeline
@@ -256,9 +278,9 @@ BOOM_REPO_ROOT=$(pwd) uv run tests/lsst-simulated/run.py \
     --data-dir /path/to/dataset_cdo \
     --keep-up
 
-# Terminal 2 — user alexm
+# Terminal 2 — user alex
 BOOM_REPO_ROOT=$(pwd) uv run tests/lsst-simulated/run.py \
-    --nickname alexm \
+    --nickname alex \
     --boom-repo-dir . \
     --data-dir /path/to/dataset_alexm \
     --keep-up
@@ -276,23 +298,25 @@ BOOM_REPO_ROOT=$(pwd) uv run tests/lsst-simulated/run.py --boom-repo-dir . --dat
 
 ### Extracting results from a specific simulation
 
-Pass `--sim-id` to `extract_output.py` to read from that simulation's Kafka topic:
+Pass `--sim-id` to `extract_output.py` to read from that simulation's Kafka output topic.
+Results are written to `results/<sim-id>/` automatically:
 
 ```bash
 uv run tests/lsst-simulated/extract_output.py \
     --broker localhost:9092 \
-    --sim-id cdo_20260819_1430 \
-    --data-dir /path/to/dataset \
-    --photometry-out photometry_cdo.csv \
-    --stats-out stats_cdo.csv
+    --sim-id cdo_20260819_143022 \
+    --data-dir /path/to/dataset_cdo \
+    --limit 200
+# → results/cdo_20260819_143022/photometry.csv
+# → results/cdo_20260819_143022/stats.csv
 ```
 
-Without `--sim-id`, it reads the default (non-scoped) topic — useful for single-user runs.
+Two users can extract simultaneously without conflict — each reads from their own scoped topic and writes to their own output directory.
 
 ### Stopping a specific simulation
 
 ```bash
-docker compose -p boom-sim-cdo_20260819_1430 -f tests/lsst-simulated/sim/compose.yaml down --volumes
+docker compose -p boom-sim-cdo_20260819_143022 -f tests/lsst-simulated/sim/compose.yaml down --volumes
 ```
 
 ### Inspecting a simulation's database
@@ -301,7 +325,7 @@ Connect to the shared MongoDB and switch to the simulation's database:
 
 ```bash
 docker compose -f tests/lsst-simulated/infra/compose.yaml exec mongo \
-  mongosh "mongodb://mongoadmin:mongoadminsecret@localhost:27017/boom-simu-cdo_20260819_1430?authSource=admin"
+  mongosh "mongodb://mongoadmin:mongoadminsecret@localhost:27017/boom-simu-cdo_20260819_143022?authSource=admin"
 ```
 
 List all simulation databases currently in MongoDB:
@@ -318,9 +342,9 @@ docker compose -f tests/lsst-simulated/infra/compose.yaml exec mongo \
 Each simulation streams its logs to its own directory:
 
 ```
-logs/lsst-simulated/cdo_20260819_1430/producer.log
-logs/lsst-simulated/cdo_20260819_1430/consumer.log
-logs/lsst-simulated/cdo_20260819_1430/scheduler.log
+logs/lsst-simulated/cdo_20260819_143022/producer.log
+logs/lsst-simulated/cdo_20260819_143022/consumer.log
+logs/lsst-simulated/cdo_20260819_143022/scheduler.log
 ```
 
 ---

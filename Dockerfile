@@ -57,6 +57,7 @@ RUN --mount=type=cache,target=/app/target,sharing=locked \
        target/release/kafka_consumer \
        target/release/kafka_producer \
        target/release/api \
+       target/release/add_filter \
        target/release/migrate_fp_flux \
        target/release/migrate_snr \
        target/release/reprocess_crossmatch \
@@ -95,6 +96,7 @@ COPY --from=builder /app/bin/kafka_producer /app/kafka_producer
 COPY --from=builder /app/bin/api /app/boom-api
 COPY --from=builder /app/bin/migrate_fp_flux /app/migrate_fp_flux
 COPY --from=builder /app/bin/migrate_snr /app/migrate_snr
+COPY --from=builder /app/bin/add_filter /app/add_filter
 COPY --from=builder /app/bin/reprocess_crossmatch /app/reprocess_crossmatch
 COPY --from=builder /opt/ort /opt/ort
 # Temporary

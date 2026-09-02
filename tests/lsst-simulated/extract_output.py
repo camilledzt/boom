@@ -4,7 +4,6 @@
 # dependencies = [
 #     "confluent-kafka",
 #     "fastavro",
-#     "lsst-alert-packet",
 #     "numpy",
 #     "pandas",
 # ]
@@ -12,16 +11,17 @@
 """
 Extract LSST simulated pipeline results from Kafka into CSV files.
 
-Outputs:
-  photometry.csv  – one row per detection for every object that passed the
-                    filter. 'passed_filter' is True for the detection that
-                    triggered the pass.
-  stats.csv       – one row per passing object with aggregate statistics,
-                    including filter efficiency (passed / total input objects).
+Outputs written to results/<sim-id>/:
+  photometry.csv  – one row per passing alert (one per detection that triggered
+                    the filter). Columns: object_id, candid, jd, mjd, band,
+                    flux_njy, flux_err_njy, mag, mag_err.
+  stats.csv       – one row per passing object with aggregate statistics
+                    (n_detections from raw CSV, n_passed_filter from Kafka,
+                    filter efficiency).
 
 Usage:
-    python extract_output.py [--broker localhost:9092]
-    uv run tests/lsst-simulated/extract_output.py --data-dir data_01_07
+    uv run tests/lsst-simulated/extract_output.py --sim-id cdo_20260819_143022 --data-dir /path/to/dataset
+    uv run tests/lsst-simulated/extract_output.py --sim-id cdo_20260819_143022 --data-dir /path/to/dataset --limit 200
 """
 
 import argparse
@@ -33,7 +33,6 @@ import uuid
 from pathlib import Path
 
 import fastavro
-import lsst.alert.packet as packet
 import pandas as pd
 from confluent_kafka import Consumer
 
@@ -50,7 +49,6 @@ PHOTOMETRY_COLS = [
     "flux_err_njy",
     "mag",
     "mag_err",
-    "passed_filter",
 ]
 
 STATS_COLS = [
@@ -106,36 +104,56 @@ def read_passing_alerts(broker: str, sim_id: str | None) -> dict[str, list[dict]
     return alerts_by_object
 
 
-def count_input_objects(broker: str, sim_id: str | None, schema_version: str = "11.0") -> int:
-    """Count distinct diaObjectId values in the alerts-simulated topic."""
-    topic = f"alerts-simulated_{sim_id}" if sim_id else "alerts-simulated"
-    sr = packet.SchemaRegistry.from_filesystem()
-    schema = sr.get_by_version(schema_version)
-
-    consumer = Consumer(
-        {
-            "bootstrap.servers": broker,
-            "group.id": f"extract-input-count-{uuid.uuid4()}",
-            "auto.offset.reset": "earliest",
-        }
+def build_detection_count_lookup(data_dir: Path, limit: int = 0) -> dict[str, int]:
+    """Return {object_id_str: n_detections} from raw lightcurve CSV files."""
+    csv_files = sorted(
+        data_dir.glob("lightcurve_*.csv"), key=lambda f: int(f.stem.split("_")[-1])
     )
-    consumer.subscribe([topic])
+    if limit > 0:
+        csv_files = csv_files[:limit]
+    lookup: dict[str, int] = {}
+    for f in csv_files:
+        lc_index = int(f.stem.split("_")[-1])
+        obj_id = lc_index if lc_index != 0 else 1_000_000
+        lc = pd.read_csv(f, usecols=["time_mjd"])
+        lookup[str(obj_id)] = len(lc)
+    return lookup
 
-    object_ids: set[int] = set()
-    while True:
-        msg = consumer.poll(5.0)
-        if msg is None:
-            break
-        if msg.error():
-            break
-        payload = msg.value()
-        # Strip 5-byte Confluent SR header: [0x00][4B schema_id]
-        avro_bytes = payload[5:]
-        alert = schema.deserialize(avro_bytes)
-        object_ids.add(alert["diaSource"]["diaObjectId"])
 
-    consumer.close()
-    return len(object_ids)
+def count_input_objects_from_dir(data_dir: Path, limit: int = 0) -> int:
+    """Count input objects from the data directory (same logic as run.py)."""
+    csv_files = sorted(
+        data_dir.glob("lightcurve_*.csv"), key=lambda f: int(f.stem.split("_")[-1])
+    )
+    if limit > 0:
+        csv_files = csv_files[:limit]
+    return len(csv_files)
+
+
+def build_candid_lookup(data_dir: Path, limit: int = 0) -> dict[tuple[str, float], int]:
+    """Return {(object_id_str, jd): candid} from the local lightcurve CSV files.
+
+    Mirrors the producer formula: candid = object_id * 100_000 + seq,
+    where seq is the integer suffix of candidate_id (e.g. "1000_7" → seq=7).
+    JD is derived from time_mjd: jd = time_mjd + 2400000.5
+    """
+    csv_files = sorted(
+        data_dir.glob("lightcurve_*.csv"), key=lambda f: int(f.stem.split("_")[-1])
+    )
+    if limit > 0:
+        csv_files = csv_files[:limit]
+
+    lookup: dict[tuple[str, float], int] = {}
+    for f in csv_files:
+        lc_index = int(f.stem.split("_")[-1])
+        obj_id = lc_index if lc_index != 0 else 1_000_000
+        lc = pd.read_csv(f, usecols=["time_mjd", "candidate_id"])
+        for _, row in lc.iterrows():
+            seq = int(str(row["candidate_id"]).split("_", 1)[1])
+            candid = obj_id * 100_000 + seq
+            jd = float(row["time_mjd"]) + 2400000.5
+            lookup[(str(obj_id), jd)] = candid
+    return lookup
 
 
 def build_target_lookup(data_dir: Path) -> dict[int, str]:
@@ -179,102 +197,126 @@ def build_target_lookup(data_dir: Path) -> dict[int, str]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--broker", default="localhost:9092")
-    parser.add_argument("--photometry-out", default="photometry.csv")
-    parser.add_argument("--stats-out", default="stats.csv")
     parser.add_argument(
-        "--data-dir", default=None, help="Path to data directory for target_name lookup"
+        "--output-dir",
+        default=None,
+        help="Directory for output files (default: results/<sim-id> or results/default)",
+    )
+    parser.add_argument(
+        "--data-dir",
+        default=None,
+        help="Path to data directory for target_name lookup and object count",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="Max objects produced (0 = no limit); must match the run.py --limit used",
     )
     parser.add_argument(
         "--sim-id",
         default=None,
-        help="Simulation ID (e.g. cdo_20260819_1430). Reads from the sim-scoped Kafka topics.",
+        help="Simulation ID (e.g. cdo_20260819_143022). Reads from the sim-scoped Kafka topics.",
     )
     args = parser.parse_args()
 
+    sim_id: str | None = args.sim_id
+
+    out_dir = Path(args.output_dir) if args.output_dir else Path("results") / (sim_id or "default")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    photometry_out = out_dir / "photometry.csv"
+    stats_out = out_dir / "stats.csv"
+
+    if sim_id:
+        print(f"Simulation ID : {sim_id}")
+    print(f"Output dir    : {out_dir}/")
+
     target_lookup: dict[int, str] = {}
+    detection_count_lookup: dict[str, int] = {}
     if args.data_dir:
         print(f"Building target name lookup from {args.data_dir}...")
         target_lookup = build_target_lookup(Path(args.data_dir))
         print(f"  Loaded {len(target_lookup)} object→target mappings")
-
-    sim_id: str | None = args.sim_id
-    if sim_id:
-        print(f"Simulation ID: {sim_id}")
+        detection_count_lookup = build_detection_count_lookup(Path(args.data_dir), args.limit)
 
     print("Reading filter results from Kafka...")
     alerts_by_object = read_passing_alerts(args.broker, sim_id)
     n_passing = len(alerts_by_object)
 
-    print("Counting total input objects from alerts-simulated topic...")
-    n_total = count_input_objects(args.broker, sim_id)
+    if args.data_dir:
+        n_total = count_input_objects_from_dir(Path(args.data_dir), args.limit)
+        print(f"Total input objects: {n_total} (from data directory)")
+    else:
+        n_total = 0
+        print("Total input objects: unknown (pass --data-dir to count)")
 
     pct = 100.0 * n_passing / n_total if n_total > 0 else 0.0
     print(f"\nFilter efficiency: {n_passing} / {n_total} objects passed ({pct:.1f}%)\n")
 
     with (
-        open(args.photometry_out, "w", newline="") as phot_f,
-        open(args.stats_out, "w", newline="") as stats_f,
+        open(photometry_out, "w", newline="") as phot_f,
+        open(stats_out, "w", newline="") as stats_f,
     ):
         phot_w = csv.DictWriter(phot_f, fieldnames=PHOTOMETRY_COLS)
         phot_w.writeheader()
         stats_w = csv.DictWriter(stats_f, fieldnames=STATS_COLS)
         stats_w.writeheader()
 
-        for object_id, msgs in sorted(alerts_by_object.items()):
-            # Map jd → candid for every detection that triggered a filter pass
-            passing: dict[float, int] = {m["jd"]: m["candid"] for m in msgs}
-
-            # Use the message with the most photometry points (latest alert)
-            best = max(msgs, key=lambda m: len(m["photometry"]))
+        for object_id, msgs in sorted(alerts_by_object.items(), key=lambda x: int(x[0])):
+            # Each message in msgs is a passing alert — write one row per message
+            msgs_sorted = sorted(msgs, key=lambda m: m["candid"])
 
             filter_names = sorted(
                 {f["filter_name"] for m in msgs for f in m["filters"]}
             )
 
-            detections = [p for p in best["photometry"] if p["origin"] == "Alert"]
-            detections.sort(key=lambda p: p["jd"])
+            first_jd = msgs_sorted[0]["jd"]
+            last_jd = msgs_sorted[-1]["jd"]
 
-            first_jd = detections[0]["jd"] if detections else None
-            last_jd = detections[-1]["jd"] if detections else None
-
-            for point in detections:
-                jd = point["jd"]
-                flux = point["flux"]
-                flux_err = point["flux_err"]
+            for m in msgs_sorted:
+                jd = m["jd"]
+                # Find the photometry point matching this alert's jd (current detection)
+                current = next(
+                    (p for p in m["photometry"] if p["origin"] == "Alert" and p["jd"] == jd),
+                    None,
+                )
+                flux = current["flux"] if current else None
+                flux_err = current["flux_err"] if current else None
+                band = current["band"] if current else ""
                 mag = flux_to_mag(flux)
                 mag_err = flux_err_to_mag_err(flux, flux_err) if flux else None
 
                 phot_w.writerow(
                     {
                         "object_id": object_id,
-                        "candid": passing.get(jd, ""),
+                        "candid": m["candid"],
                         "jd": jd,
                         "mjd": f"{jd_to_mjd(jd):.6f}",
-                        "band": point["band"],
+                        "band": band,
                         "flux_njy": flux if flux is not None else "",
-                        "flux_err_njy": flux_err,
+                        "flux_err_njy": flux_err if flux_err is not None else "",
                         "mag": f"{mag:.4f}" if mag is not None else "",
                         "mag_err": f"{mag_err:.4f}" if mag_err is not None else "",
-                        "passed_filter": jd in passing,
                     }
                 )
 
+            best = max(msgs, key=lambda m: len(m["photometry"]))
             stats_w.writerow(
                 {
                     "object_id": object_id,
                     "target_name": target_lookup.get(int(object_id), ""),
                     "ra": best["ra"],
                     "dec": best["dec"],
-                    "n_detections": len(detections),
-                    "n_passed_filter": len(passing),
+                    "n_detections": detection_count_lookup.get(object_id, len(msgs_sorted)),
+                    "n_passed_filter": len(msgs_sorted),
                     "filter_names": "|".join(filter_names),
                     "first_jd": first_jd,
                     "last_jd": last_jd,
                 }
             )
 
-    print(f"Wrote {args.photometry_out}")
-    print(f"Wrote {args.stats_out}")
+    print(f"Wrote {photometry_out}")
+    print(f"Wrote {stats_out}")
 
 
 if __name__ == "__main__":

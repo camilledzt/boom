@@ -54,7 +54,7 @@ DATA_DIR = (
 
 # Build simulation ID: {nickname}_{YYYYMMDD}_{HHMM} or {YYYYMMDD}_{HHMM}
 now = datetime.now(timezone.utc)
-date_str = now.strftime("%Y%m%d_%H%M")
+date_str = now.strftime("%Y%m%d_%H%M%S")
 SIM_ID = f"{args.nickname}_{date_str}" if args.nickname else date_str
 # MongoDB names cannot contain slashes or dots; underscores are safe.
 DB_NAME = f"boom-simu-{SIM_ID}"
@@ -74,8 +74,8 @@ config["database"]["name"] = DB_NAME
 config["database"]["host"] = "mongo"
 config["database"]["password"] = "mongoadminsecret"
 config["kafka"]["consumer"]["lsst"]["server"] = "broker:29092"
-config["kafka"]["consumer"]["lsst"]["username"] = ""
-config["kafka"]["consumer"]["lsst"]["password"] = ""
+config["kafka"]["consumer"]["lsst"]["username"] = None
+config["kafka"]["consumer"]["lsst"]["password"] = None
 config["kafka"]["consumer"]["lsst"]["group_id"] = f"lsst-simulated-{SIM_ID}"
 config["kafka"]["consumer"]["lsst"]["schema_github_fallback_url"] = (
     "https://github.com/lsst/alert_packet/tree/w.2026.19/python/lsst/alert/packet/schema"
@@ -85,11 +85,15 @@ config["kafka"]["producer"]["server"] = "broker:29092"
 config["redis"]["host"] = "valkey"
 config["cutouts_storage"]["host"] = "mongo"
 config["cutouts_storage"]["password"] = "mongoadminsecret"
+config["cutouts_storage"]["name"] = DB_NAME
 config["api"]["auth"]["secret_key"] = "lsst-simulated-test-secret-key-32chars"
 config["api"]["auth"]["admin_password"] = "adminsecret"
 config["workers"]["lsst"]["alert"]["n_workers"] = 4
 config["workers"]["lsst"]["enrichment"]["n_workers"] = 6
 config["workers"]["lsst"]["filter"]["n_workers"] = 2
+# Simulated data doesn't need external catalog lookups — clear crossmatches
+# so enrichment never tries to reach NED/LSPSC over the network.
+config["crossmatch"]["lsst"] = []
 
 with open(SIM_CONFIG_PATH, "w") as f:
     yaml.safe_dump(config, f, default_flow_style=False, sort_keys=False)

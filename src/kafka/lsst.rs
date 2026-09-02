@@ -21,7 +21,7 @@ impl LsstAlertConsumer {
 }
 
 /// Appends `_{BOOM_SIM_ID}` to `name` when the env var is set and non-empty.
-pub(crate) fn sim_suffix(name: &str) -> String {
+pub fn sim_suffix(name: &str) -> String {
     match std::env::var("BOOM_SIM_ID").ok().filter(|s| !s.is_empty()) {
         Some(id) => format!("{}_{}", name, id),
         None => name.to_string(),

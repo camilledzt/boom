@@ -9,6 +9,6 @@ pub use base::{
     AlertProducer, StartDate,
 };
 pub use decam::{DecamAlertConsumer, DecamAlertProducer};
-pub use lsst::LsstAlertConsumer;
+pub use lsst::{sim_suffix, LsstAlertConsumer};
 pub use winter::{WinterAlertConsumer, WinterAlertProducer};
 pub use ztf::{ZtfAlertConsumer, ZtfAlertProducer};

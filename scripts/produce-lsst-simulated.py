@@ -274,7 +274,10 @@ def alerts_from_csv(
         mjd = float(row["time_mjd"])
         band = str(row["band"])
         flux = mag_to_flux(float(row["mag"]))
-        flux_err = flux * 0.05
+        if "mag_err" in df.columns and not pd.isna(row["mag_err"]):
+            flux_err = mag_err_to_flux_err(float(row["mag_err"]), flux)
+        else:
+            flux_err = flux * 0.05
 
         cid_str = str(row["candidate_id"])
         seq = int(cid_str.split("_", 1)[1])
