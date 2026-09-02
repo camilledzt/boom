@@ -271,7 +271,7 @@ def alerts_from_csv(
     detection_count = 0
 
     for visit_idx, row in df.iterrows():
-        mjd = float(row["time_mjd"])
+        mjd = float(row["time_mjd"]) + 37 / 86400  # UTC → TAI (current leap second offset)
         band = str(row["band"])
         flux = mag_to_flux(float(row["mag"]))
         if "mag_err" in df.columns and not pd.isna(row["mag_err"]):
