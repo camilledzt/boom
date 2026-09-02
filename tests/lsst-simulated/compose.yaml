@@ -102,12 +102,12 @@ services:
       - ${DATA_DIR_HOST:-${BOOM_REPO_ROOT}/data_alex}:/data_alex
     environment:
       - DATA_DIR=/data_alex
-      - PRODUCER_LIMIT=${PRODUCER_LIMIT:-0}
+      - PRODUCER_IDS=${PRODUCER_IDS:-}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         pip install --quiet lsst-alert-packet confluent-kafka numpy pandas && \
-        python /produce-lsst-simulated.py --broker broker:29092 --data-dir /data_alex --reset ${PRODUCER_LIMIT:+--limit $PRODUCER_LIMIT} ${PRODUCER_WORKERS:+--workers $PRODUCER_WORKERS}
+        python /produce-lsst-simulated.py --broker broker:29092 --data-dir /data_alex --reset ${PRODUCER_IDS:+--ids $PRODUCER_IDS} ${PRODUCER_WORKERS:+--workers $PRODUCER_WORKERS}
 
   add-filter:
     image: boom-astro/boom:latest

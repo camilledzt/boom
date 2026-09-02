@@ -6,6 +6,7 @@
 #     "fastavro",
 #     "numpy",
 #     "pandas",
+#     "pyyaml",
 # ]
 # ///
 """
@@ -20,8 +21,8 @@ Outputs written to results/<sim-id>/:
                     filter efficiency).
 
 Usage:
-    uv run tests/lsst-simulated/extract_output.py --sim-id cdo_20260819_143022 --data-dir /path/to/dataset
-    uv run tests/lsst-simulated/extract_output.py --sim-id cdo_20260819_143022 --data-dir /path/to/dataset --limit 200
+    uv run tests/lsst-simulated/extract_output.py --config tests/lsst-simulated/example-config.yaml --sim-id cdo_tai_20260902_151041
+    uv run tests/lsst-simulated/extract_output.py --data-dir /path/to/dataset --sim-id cdo_20260819_143022
 """
 
 import argparse
@@ -34,6 +35,7 @@ from pathlib import Path
 
 import fastavro
 import pandas as pd
+import yaml
 from confluent_kafka import Consumer
 
 LSST_ZP_AB_NJY = 31.4
@@ -78,6 +80,19 @@ def jd_to_mjd(jd: float) -> float:
     return jd - 2400000.5
 
 
+def resolve_csv_files(data_dir: Path, ids=None, obj_range=None, limit: int = 0) -> list[Path]:
+    all_csv = sorted(
+        data_dir.glob("lightcurve_*.csv"), key=lambda f: int(f.stem.split("_")[-1])
+    )
+    if ids is not None:
+        id_set = set(ids)
+        return [f for f in all_csv if int(f.stem.split("_")[-1]) in id_set]
+    if obj_range is not None:
+        start, end = obj_range[0], obj_range[1]
+        return [f for f in all_csv if start <= int(f.stem.split("_")[-1]) <= end]
+    return all_csv[:limit] if limit > 0 else all_csv
+
+
 def read_passing_alerts(broker: str, sim_id: str | None) -> dict[str, list[dict]]:
     topic = f"LSST_alerts_results_{sim_id}" if sim_id else "LSST_alerts_results"
     consumer = Consumer(
@@ -104,13 +119,8 @@ def read_passing_alerts(broker: str, sim_id: str | None) -> dict[str, list[dict]
     return alerts_by_object
 
 
-def build_detection_count_lookup(data_dir: Path, limit: int = 0) -> dict[str, int]:
+def build_detection_count_lookup(csv_files: list[Path]) -> dict[str, int]:
     """Return {object_id_str: n_detections} from raw lightcurve CSV files."""
-    csv_files = sorted(
-        data_dir.glob("lightcurve_*.csv"), key=lambda f: int(f.stem.split("_")[-1])
-    )
-    if limit > 0:
-        csv_files = csv_files[:limit]
     lookup: dict[str, int] = {}
     for f in csv_files:
         lc_index = int(f.stem.split("_")[-1])
@@ -120,29 +130,8 @@ def build_detection_count_lookup(data_dir: Path, limit: int = 0) -> dict[str, in
     return lookup
 
 
-def count_input_objects_from_dir(data_dir: Path, limit: int = 0) -> int:
-    """Count input objects from the data directory (same logic as run.py)."""
-    csv_files = sorted(
-        data_dir.glob("lightcurve_*.csv"), key=lambda f: int(f.stem.split("_")[-1])
-    )
-    if limit > 0:
-        csv_files = csv_files[:limit]
-    return len(csv_files)
-
-
-def build_candid_lookup(data_dir: Path, limit: int = 0) -> dict[tuple[str, float], int]:
-    """Return {(object_id_str, jd): candid} from the local lightcurve CSV files.
-
-    Mirrors the producer formula: candid = object_id * 100_000 + seq,
-    where seq is the integer suffix of candidate_id (e.g. "1000_7" → seq=7).
-    JD is derived from time_mjd: jd = time_mjd + 2400000.5
-    """
-    csv_files = sorted(
-        data_dir.glob("lightcurve_*.csv"), key=lambda f: int(f.stem.split("_")[-1])
-    )
-    if limit > 0:
-        csv_files = csv_files[:limit]
-
+def build_candid_lookup(csv_files: list[Path]) -> dict[tuple[str, float], int]:
+    """Return {(object_id_str, jd): candid} from the local lightcurve CSV files."""
     lookup: dict[tuple[str, float], int] = {}
     for f in csv_files:
         lc_index = int(f.stem.split("_")[-1])
@@ -160,7 +149,6 @@ def build_target_lookup(data_dir: Path) -> dict[int, str]:
     """Return a mapping objectid → target_name using the data directory CSVs."""
     summary = pd.read_csv(data_dir / "summary.csv")
 
-    # New format: target_name is directly in summary.csv
     if "target_name" in summary.columns:
         lookup: dict[int, str] = {}
         for csv_file in sorted(data_dir.glob("lightcurve_*.csv")):
@@ -172,7 +160,6 @@ def build_target_lookup(data_dir: Path) -> dict[int, str]:
             lookup[object_id] = str(row["target_name"].iloc[0])
         return lookup
 
-    # Old format: join with opsim_fields_index.csv
     opsim = pd.read_csv(
         data_dir / "opsim_fields_index.csv", usecols=["field_index", "target_name"]
     )
@@ -196,7 +183,10 @@ def build_target_lookup(data_dir: Path) -> dict[int, str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--broker", default="localhost:9092")
+    parser.add_argument("--broker", default=None, help="Kafka broker address (overrides config)")
+    parser.add_argument(
+        "--config", default=None, help="Path to simulation config YAML file"
+    )
     parser.add_argument(
         "--output-dir",
         default=None,
@@ -205,23 +195,32 @@ def main() -> None:
     parser.add_argument(
         "--data-dir",
         default=None,
-        help="Path to data directory for target_name lookup and object count",
+        help="Path to data directory (overrides config)",
     )
     parser.add_argument(
         "--limit",
         type=int,
         default=0,
-        help="Max objects produced (0 = no limit); must match the run.py --limit used",
+        help="Max objects to consider (0 = no limit); ignored when config specifies ids or range",
     )
     parser.add_argument(
         "--sim-id",
         default=None,
-        help="Simulation ID (e.g. cdo_20260819_143022). Reads from the sim-scoped Kafka topics.",
+        help="Simulation ID (e.g. cdo_tai_20260902_151041). Reads from the sim-scoped Kafka topics.",
     )
     args = parser.parse_args()
 
-    sim_id: str | None = args.sim_id
+    cfg: dict = {}
+    if args.config:
+        with open(args.config) as f:
+            cfg = yaml.safe_load(f) or {}
 
+    broker = args.broker or cfg.get("broker", "localhost:9092")
+    data_dir_str = args.data_dir or cfg.get("data_dir")
+    ids = cfg.get("ids")
+    obj_range = cfg.get("range")
+
+    sim_id: str | None = args.sim_id
     out_dir = Path(args.output_dir) if args.output_dir else Path("results") / (sim_id or "default")
     out_dir.mkdir(parents=True, exist_ok=True)
     photometry_out = out_dir / "photometry.csv"
@@ -233,22 +232,25 @@ def main() -> None:
 
     target_lookup: dict[int, str] = {}
     detection_count_lookup: dict[str, int] = {}
-    if args.data_dir:
-        print(f"Building target name lookup from {args.data_dir}...")
-        target_lookup = build_target_lookup(Path(args.data_dir))
+    csv_files: list[Path] = []
+
+    if data_dir_str:
+        data_dir = Path(data_dir_str)
+        csv_files = resolve_csv_files(data_dir, ids=ids, obj_range=obj_range, limit=args.limit)
+        print(f"Building target name lookup from {data_dir_str} ({len(csv_files)} objects)...")
+        target_lookup = build_target_lookup(data_dir)
         print(f"  Loaded {len(target_lookup)} object→target mappings")
-        detection_count_lookup = build_detection_count_lookup(Path(args.data_dir), args.limit)
+        detection_count_lookup = build_detection_count_lookup(csv_files)
 
     print("Reading filter results from Kafka...")
-    alerts_by_object = read_passing_alerts(args.broker, sim_id)
+    alerts_by_object = read_passing_alerts(broker, sim_id)
     n_passing = len(alerts_by_object)
 
-    if args.data_dir:
-        n_total = count_input_objects_from_dir(Path(args.data_dir), args.limit)
+    n_total = len(csv_files) if csv_files else 0
+    if n_total:
         print(f"Total input objects: {n_total} (from data directory)")
     else:
-        n_total = 0
-        print("Total input objects: unknown (pass --data-dir to count)")
+        print("Total input objects: unknown (pass --data-dir or --config to count)")
 
     pct = 100.0 * n_passing / n_total if n_total > 0 else 0.0
     print(f"\nFilter efficiency: {n_passing} / {n_total} objects passed ({pct:.1f}%)\n")
@@ -263,7 +265,6 @@ def main() -> None:
         stats_w.writeheader()
 
         for object_id, msgs in sorted(alerts_by_object.items(), key=lambda x: int(x[0])):
-            # Each message in msgs is a passing alert — write one row per message
             msgs_sorted = sorted(msgs, key=lambda m: m["candid"])
 
             filter_names = sorted(
@@ -275,7 +276,6 @@ def main() -> None:
 
             for m in msgs_sorted:
                 jd = m["jd"]
-                # Find the photometry point matching this alert's jd (current detection)
                 current = next(
                     (p for p in m["photometry"] if p["origin"] == "Alert" and p["jd"] == jd),
                     None,

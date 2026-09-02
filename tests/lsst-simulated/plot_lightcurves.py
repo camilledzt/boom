@@ -4,6 +4,7 @@
 # dependencies = [
 #     "matplotlib",
 #     "pandas",
+#     "pyyaml",
 # ]
 # ///
 """
@@ -26,6 +27,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import yaml
 
 BANDS = ["lsstu", "lsstg", "lsstr", "lssti", "lsstz", "lssty"]
 
@@ -153,21 +155,49 @@ def load_raw_lightcurve(filepath: Path) -> pd.DataFrame:
     return det[["mjd", "band", "mag", "mag_err", "passed_filter", "seq"]]
 
 
+def resolve_csv_files(data_dir: Path, ids=None, obj_range=None, limit: int = 0) -> list[Path]:
+    all_csv = sorted(
+        data_dir.glob("lightcurve_*.csv"), key=lambda f: int(f.stem.split("_")[-1])
+    )
+    if ids is not None:
+        id_set = set(ids)
+        return [f for f in all_csv if int(f.stem.split("_")[-1]) in id_set]
+    if obj_range is not None:
+        start, end = obj_range[0], obj_range[1]
+        return [f for f in all_csv if start <= int(f.stem.split("_")[-1]) <= end]
+    return all_csv[:limit] if limit > 0 else all_csv
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--sim-id", required=True, help="Simulation ID (e.g. cdo_20260819_143022)")
+    parser.add_argument("--sim-id", required=True, help="Simulation ID (e.g. cdo_tai_20260902_151041)")
+    parser.add_argument(
+        "--config", default=None, help="Path to simulation config YAML file"
+    )
     parser.add_argument(
         "--data-dir",
-        required=True,
-        help="Raw lightcurve CSV directory (same as passed to run.py and extract_output.py)",
+        default=None,
+        help="Raw lightcurve CSV directory (overrides config)",
     )
     parser.add_argument(
         "--limit",
         type=int,
         default=0,
-        help="Match the --limit passed to the producer (0 = no limit).",
+        help="Max objects to plot (0 = no limit); ignored when config specifies ids or range",
     )
     args = parser.parse_args()
+
+    cfg: dict = {}
+    if args.config:
+        with open(args.config) as f:
+            cfg = yaml.safe_load(f) or {}
+
+    data_dir_str = args.data_dir or cfg.get("data_dir")
+    if not data_dir_str:
+        raise SystemExit("--data-dir or --config with data_dir is required")
+
+    ids = cfg.get("ids")
+    obj_range = cfg.get("range")
 
     results_dir = Path("results") / args.sim_id
     output_dir = Path("plots") / args.sim_id
@@ -197,13 +227,8 @@ def main() -> None:
         candids = sub["candid"].dropna()
         passing_seqs_by_id[oid] = {int(c) % 100_000 for c in candids}
 
-    data_dir = Path(args.data_dir)
-    csv_files = sorted(
-        data_dir.glob("lightcurve_*.csv"),
-        key=lambda f: int(f.stem.split("_")[-1]),
-    )
-    if args.limit > 0:
-        csv_files = csv_files[: args.limit]
+    data_dir = Path(data_dir_str)
+    csv_files = resolve_csv_files(data_dir, ids=ids, obj_range=obj_range, limit=args.limit)
 
     def _oid(f: Path) -> str:
         s = int(f.stem.split("_")[-1])

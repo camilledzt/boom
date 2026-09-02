@@ -1,0 +1,43 @@
+# Example simulation config — equivalent to:
+#   uv run tests/lsst-simulated/run.py --nickname cdo_tai --boom-repo-dir . --data-dir data_02092026_1 --keep-up
+#
+# Usage:
+#   BOOM_REPO_ROOT=$(pwd) uv run tests/lsst-simulated/run.py \
+#       --boom-repo-dir . \
+#       --config tests/lsst-simulated/example-config.yaml \
+#       --keep-up
+#
+# CLI flags always override config values.
+# --keep-up and --boom-repo-dir are runtime/infra flags — they stay on the CLI.
+
+# Simulation identity
+nickname: "cdo_tai"
+
+# Dataset
+data_dir: "data_02092026_1"
+
+# Object selection — pick ONE of the two forms below:
+#
+# Form 1 — explicit list of lightcurve indices
+ids: [500, 7500]
+#
+# Form 2 — inclusive range
+# range: [100, 200]
+#
+# Default (both commented out): produce all objects in data_dir
+# Use --limit N on the CLI for a quick "first N" run without a config.
+
+# Infrastructure
+timeout: 600            # seconds before the test fails
+workers: 8              # producer parallelism (default: CPU count)
+
+# Worker counts inside BOOM
+n_alert_workers: 4
+n_enrichment_workers: 6
+n_filter_workers: 2
+
+# Filter pipeline to load into the test database
+filter_file: "tests/lsst-simulated/filter_KN_PRODUCTION.json"
+
+# Kafka broker address — used by extract_output.py (broker must be reachable from host)
+broker: "localhost:9092"

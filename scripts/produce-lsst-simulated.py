@@ -394,6 +394,11 @@ def main() -> None:
         "--limit", type=int, default=0, help="Max objects to produce (0 = no limit)"
     )
     parser.add_argument(
+        "--ids",
+        default=None,
+        help="Comma-separated lightcurve indices to produce (overrides --limit)",
+    )
+    parser.add_argument(
         "--reset",
         action="store_true",
         help="Delete and recreate the Kafka topic before producing",
@@ -417,7 +422,10 @@ def main() -> None:
         print(f"No lightcurve CSV files found in {data_dir}")
         return
 
-    if args.limit > 0:
+    if args.ids is not None:
+        id_set = {int(x) for x in args.ids.split(",")}
+        csv_files = [f for f in csv_files if int(f.stem.split("_")[-1]) in id_set]
+    elif args.limit > 0:
         csv_files = csv_files[: args.limit]
 
     position_lookup: dict[int, tuple[float, float]] = {}

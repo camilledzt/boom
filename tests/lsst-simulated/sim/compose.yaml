@@ -7,7 +7,7 @@
 #   SIM_CONFIG_PATH  – absolute path to the generated per-sim config.yaml
 #   DATA_DIR_HOST    – absolute path to the lightcurve data directory
 #   FILTER_FILE      – absolute path to the filter JSON file
-#   PRODUCER_LIMIT   – max objects to produce (0 = no limit)
+#   PRODUCER_IDS     – comma-separated lightcurve indices to produce (empty = all)
 
 networks:
   boom:
@@ -55,7 +55,7 @@ services:
       - ${DATA_DIR_HOST:-/tmp}:/data_alex
     environment:
       - DATA_DIR=/data_alex
-      - PRODUCER_LIMIT=${PRODUCER_LIMIT:-0}
+      - PRODUCER_IDS=${PRODUCER_IDS:-}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -65,7 +65,7 @@ services:
           --topic alerts-simulated_${SIM_ID:-default} \
           --data-dir /data_alex \
           --reset \
-          ${PRODUCER_LIMIT:+--limit $PRODUCER_LIMIT} \
+          ${PRODUCER_IDS:+--ids $PRODUCER_IDS} \
           ${PRODUCER_WORKERS:+--workers $PRODUCER_WORKERS}
 
   consumer:

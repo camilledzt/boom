@@ -94,14 +94,13 @@ BOOM_REPO_ROOT=$(pwd) docker compose -f tests/lsst-simulated/compose.yaml build 
 BOOM_REPO_ROOT=$(pwd) uv run tests/lsst-simulated/run.py \
     --boom-repo-dir . \
     --data-dir /path/to/dataset \
-    --timeout 600 \
-    --limit 1000
+    --timeout 600
 ```
 
 `run.py` will:
-1. Generate `tests/lsst-simulated/config.yaml` from the root `config.yaml` (patching DB name, broker address, and credentials for the isolated stack)
+1. Generate a per-sim `tests/lsst-simulated/sims/config-{sim_id}.yaml` from the root `config.yaml` (patching DB name, broker address, and credentials for the isolated stack)
 2. Count expected alerts from `summary.csv` (or by reading the CSV files directly if `n_detected` is unavailable)
-3. Start all services via `tests/lsst-simulated/compose.yaml`
+3. Start all services via `tests/lsst-simulated/sim/compose.yaml`
 4. Poll MongoDB until all expected alerts are ingested and enriched
 5. Tear everything down (unless `--keep-up` is set)
 
@@ -110,11 +109,59 @@ BOOM_REPO_ROOT=$(pwd) uv run tests/lsst-simulated/run.py \
 | Flag | Default | Description |
 |---|---|---|
 | `--boom-repo-dir` | `.` | Path to the repo root |
+| `--config` | — | Path to a simulation config YAML file (see below) |
 | `--data-dir` | `data_alex/` | Directory containing the dataset |
 | `--timeout` | `600` | Seconds before the test fails |
 | `--limit N` | `0` (no limit) | Process at most N lightcurve files |
+| `--nickname` | — | Short prefix for the simulation ID |
+| `--workers` | CPU count | Producer parallelism |
+| `--n-alert-workers` | `4` | Alert worker count |
+| `--n-enrichment-workers` | `6` | Enrichment worker count |
+| `--n-filter-workers` | `2` | Filter worker count |
 | `--keep-up` | off | Keep services running after the test (required to extract results — see step 5) |
 | `--filter-file` | `tests/lsst-simulated/filter_KN_PRODUCTION.json` | Filter JSON pipeline to load |
+
+CLI flags always override config file values.
+
+### Simulation config file
+
+For reproducible experiments, all parameters can be stored in a YAML config file and passed with `--config`:
+
+```bash
+BOOM_REPO_ROOT=$(pwd) uv run tests/lsst-simulated/run.py \
+    --boom-repo-dir . \
+    --config tests/lsst-simulated/example-config.yaml \
+    --keep-up
+```
+
+The config file supports two forms of object selection (pick one):
+
+```yaml
+# Form 1 — explicit list of lightcurve indices
+ids: [12, 29, 190]
+
+# Form 2 — inclusive range
+range: [100, 200]
+```
+
+For a quick "first N" run without a config file, use `--limit N` on the CLI.
+
+Full list of supported keys:
+
+```yaml
+nickname: "cdo_tai"
+data_dir: "data_02092026_1"
+filter_file: "tests/lsst-simulated/filter_KN_PRODUCTION.json"
+timeout: 600
+workers: 8
+n_alert_workers: 4
+n_enrichment_workers: 6
+n_filter_workers: 2
+# object selection (one of: ids / range)
+ids: [12, 29, 190]
+```
+
+See `tests/lsst-simulated/example-config.yaml` for a commented template.
 
 ### Using a different filter
 
@@ -138,17 +185,21 @@ When the simulation finishes with `--keep-up`, the Kafka broker is still running
 extract filter results into CSV files:
 
 ```bash
+# With a config file (object selection is automatic)
 uv run tests/lsst-simulated/extract_output.py \
-    --broker localhost:9092 \
-    --sim-id cdo_20260819_143022 \
+    --config tests/lsst-simulated/example-config.yaml \
+    --sim-id cdo_tai_20260902_151041
+
+# Without a config file
+uv run tests/lsst-simulated/extract_output.py \
     --data-dir /path/to/dataset \
-    --limit 200
+    --sim-id cdo_20260819_143022
 ```
 
 Output files are written to `results/<sim-id>/`:
 
 ```
-results/cdo_20260819_143022/
+results/cdo_tai_20260902_151041/
   photometry.csv
   stats.csv
 ```
@@ -162,9 +213,9 @@ results/cdo_20260819_143022/
 
 **`--sim-id`** selects the scoped Kafka output topic (`LSST_alerts_results_{sim_id}`). If omitted, reads from the unsuffixed topic (production mode).
 
-**`--limit`** must match the `--limit` value passed to `run.py` — it is used to count total input objects from `--data-dir` and compute filter efficiency correctly.
+**`--config`** reads `data_dir`, `broker`, and object selection (`ids`/`range`) from the same config used for `run.py` — no need to repeat them on the CLI.
 
-**`--data-dir`** is optional but recommended: it adds `target_name` from `summary.csv` to `stats.csv` and enables the object count.
+**`--data-dir`** overrides config; adds `target_name` from `summary.csv` to `stats.csv` and enables the object count.
 
 **`--output-dir`** overrides the default output directory if needed.
 
@@ -268,21 +319,19 @@ docker compose -f tests/lsst-simulated/infra/compose.yaml down --volumes
 
 ### Running simulations in parallel
 
-Each user runs `run.py` with their own nickname from their own terminal:
+Each user runs `run.py` with their own config from their own terminal:
 
 ```bash
 # Terminal 1 — user cdo
 BOOM_REPO_ROOT=$(pwd) uv run tests/lsst-simulated/run.py \
-    --nickname cdo \
     --boom-repo-dir . \
-    --data-dir /path/to/dataset_cdo \
+    --config tests/lsst-simulated/my-config.yaml \
     --keep-up
 
 # Terminal 2 — user alex
 BOOM_REPO_ROOT=$(pwd) uv run tests/lsst-simulated/run.py \
-    --nickname alex \
     --boom-repo-dir . \
-    --data-dir /path/to/dataset_alexm \
+    --config tests/lsst-simulated/alex-config.yaml \
     --keep-up
 ```
 
