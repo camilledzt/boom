@@ -147,6 +147,16 @@ If `summary.csv` is absent entirely, all objects get `(ra=0, dec=0)`.
 
 ---
 
+## Requirement: unique `time_mjd` per detection
+
+**Every row in a lightcurve file must have a unique `time_mjd`.**
+
+BOOM deduplicates `prv_candidates` by JD when ingesting alerts. If two detections
+share the same `time_mjd` (e.g. multiple bands observed at exactly the same epoch),
+only the first one processed is kept in the history — the others are silently dropped.
+
+---
+
 ## How alerts are built
 
 For each lightcurve file the pipeline:

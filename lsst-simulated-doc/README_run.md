@@ -368,6 +368,27 @@ Two users can extract simultaneously without conflict — each reads from their 
 docker compose -p boom-sim-cdo_20260819_143022 -f tests/lsst-simulated/sim/compose.yaml down --volumes
 ```
 
+### Verifying Kafka topic completeness
+
+Check how many alerts were actually written to the topic (offset = total messages):
+
+```bash
+docker compose -f tests/lsst-simulated/infra/compose.yaml exec broker \
+  /opt/kafka/bin/kafka-get-offsets.sh \
+  --bootstrap-server broker:9092 \
+  --topic alerts-simulated_<sim_id>
+# → alerts-simulated_<sim_id>:0:9256
+```
+
+Cross-check against the input data:
+
+```bash
+grep "Done\." logs/lsst-simulated/<sim_id>/producer.log
+# → Done. 9256 alerts produced to 'alerts-simulated_<sim_id>'
+```
+
+Both numbers should match the total row count across all lightcurve CSV files.
+
 ### Inspecting a simulation's database
 
 Connect to the shared MongoDB and switch to the simulation's database:
