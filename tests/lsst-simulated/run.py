@@ -157,7 +157,7 @@ print(f"Expected alerts: {expected_alerts} (from {n_objects} lightcurve files)")
 INFRA_COMPOSE = ["-f", os.path.join(TEST_DIR, "infra", "compose.yaml")]
 print("Starting shared infrastructure (broker, mongo, valkey)...")
 subprocess.run(
-    ["docker", "compose", *INFRA_COMPOSE, "up", "-d", "--wait"],
+    ["docker", "compose", "--progress", "quiet", *INFRA_COMPOSE, "up", "-d", "--wait"],
     check=True,
 )
 

@@ -226,7 +226,7 @@ def _alert(
 
 
 def _load_position_lookup(data_dir: Path) -> dict[int, tuple[float, float]]:
-    """Build a mapping from lightcurve file index → (ra_deg, dec_deg).
+    """Build a mapping from objectid → (ra_deg, dec_deg).
 
     Supports two summary.csv formats:
     - New format: has fieldRA/fieldDec columns directly
@@ -235,13 +235,13 @@ def _load_position_lookup(data_dir: Path) -> dict[int, tuple[float, float]]:
     summary = pd.read_csv(data_dir / "summary.csv")
     if "fieldRA" in summary.columns and "fieldDec" in summary.columns:
         return {
-            int(row["i"]): (float(row["fieldRA"]), float(row["fieldDec"]))
+            int(row["objectid"]): (float(row["fieldRA"]), float(row["fieldDec"]))
             for _, row in summary.iterrows()
         }
     opsim = pd.read_csv(data_dir / "opsim_fields_index.csv")
     merged = summary.merge(opsim, left_on="field_idx", right_on="field_index")
     return {
-        int(row["i"]): (float(row["ra0_deg"]), float(row["dec0_deg"]))
+        int(row["objectid"]): (float(row["ra0_deg"]), float(row["dec0_deg"]))
         for _, row in merged.iterrows()
     }
 
@@ -264,7 +264,7 @@ def alerts_from_csv(
 
     object_id = int(filepath.stem.split("_")[-1])
     if object_id == 0:
-        object_id = lc_index + 1_000_000
+        object_id = object_id + 1_000_000
 
     detections: list[dict] = []
     alerts: list[dict] = []

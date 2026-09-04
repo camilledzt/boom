@@ -12,9 +12,11 @@ topic `LSST_alerts_results` and extracted into CSV files for analysis.
 
 ---
 
-## Prerequisites — Python environment
+## Prerequisites 
 
-Python >= 3.13 and [uv](https://docs.astral.sh/uv/) are required.
+
+* Docker
+* Python >= 3.13 and [uv](https://docs.astral.sh/uv/) are required.
 
 ### Create the virtual environment
 
@@ -88,7 +90,36 @@ BOOM_REPO_ROOT=$(pwd) docker compose -f tests/lsst-simulated/compose.yaml build 
 
 ---
 
-## 4. Run the simulation
+## 4. Run the full pipeline (one command)
+
+`pipeline.py` chains steps 4–6 automatically: simulation → extract → plot → teardown.
+
+```bash
+BOOM_REPO_ROOT=$(pwd) uv run tests/lsst-simulated/pipeline.py \
+    --boom-repo-dir . \
+    --config tests/lsst-simulated/my-config.yaml
+```
+
+It captures the `sim_id` from `run.py`'s output and passes it automatically to `extract_output.py` and `plot_lightcurves.py` — no need to copy-paste IDs between steps.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--config` | — | Simulation config YAML (same as `run.py`) |
+| `--nickname` | — | Short prefix for the simulation ID |
+| `--data-dir` | — | Path to dataset (overrides config) |
+| `--limit N` | — | Max objects |
+| `--filter-file` | — | Filter JSON to load |
+| `--timeout` | — | Simulation timeout in seconds |
+| `--workers` | — | Producer parallelism |
+| `--broker` | `localhost:9092` | Kafka broker for extraction |
+| `--no-plot` | off | Skip the plotting step |
+| `--keep-up` | off | Keep sim services running after the pipeline |
+
+Use `--keep-up` if you want to inspect the database or re-run extraction manually afterwards.
+
+---
+
+## 5. Run the simulation manually (step by step)
 
 ```bash
 BOOM_REPO_ROOT=$(pwd) uv run tests/lsst-simulated/run.py \
@@ -179,7 +210,7 @@ BOOM_REPO_ROOT=$(pwd) docker compose -f tests/lsst-simulated/compose.yaml down -
 
 ---
 
-## 5. Extract results (requires `--keep-up`)
+## 6. Extract results (requires `--keep-up`)
 
 When the simulation finishes with `--keep-up`, the Kafka broker is still running and you can
 extract filter results into CSV files:
@@ -230,7 +261,7 @@ docker compose -p boom-sim-cdo_20260819_143022 -f tests/lsst-simulated/sim/compo
 
 ---
 
-## 6. Analyse results
+## 7. Analyse results
 
 ### Plot lightcurves
 

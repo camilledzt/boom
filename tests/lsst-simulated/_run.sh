@@ -49,9 +49,9 @@ mongo_count() {
     echo "${raw:-0}"
 }
 
-docker compose "${SIM_COMPOSE[@]}" down --volumes 2>/dev/null || true
+docker compose --progress quiet "${SIM_COMPOSE[@]}" down --volumes 2>/dev/null || true
 
-if ! docker compose "${SIM_COMPOSE[@]}" up -d; then
+if ! docker compose --progress quiet "${SIM_COMPOSE[@]}" up -d; then
     echo "$(current_datetime) - ERROR: Failed to start simulation services"
     docker compose "${SIM_COMPOSE[@]}" logs mongo-init || true
     exit 1
@@ -107,7 +107,7 @@ echo "$(current_datetime) - [${SIM_ID}] All $EXPECTED_ALERTS alerts enriched"
 echo "$(current_datetime) - [${SIM_ID}] Pipeline completed successfully"
 
 if [ "$KEEP_UP" = false ]; then
-    docker compose "${SIM_COMPOSE[@]}" down --volumes
+    docker compose --progress quiet "${SIM_COMPOSE[@]}" down --volumes
 fi
 
 exit 0

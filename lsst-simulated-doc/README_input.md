@@ -113,14 +113,19 @@ If the filename suffix is `0` (ambiguous), `object_id` is set to `lc_index + 1_0
 
 ### `summary.csv`
 
-Each row corresponds to one lightcurve file. Column `i` is the file index.
+Each row corresponds to one lightcurve file.
+
+> **The filename suffix is used as the lookup key into `summary.csv`.** `lightcurve_0005.csv`
+> looks up `objectid=5`. The filename suffix must therefore equal `objectid`.
+>
+> **`objectid` must be a number, never a zero-padded string.** `"0005"` will not match `5` — the
+> lookup silently falls back to `(ra=0, dec=0)`.
 
 **v2 format** — RA/Dec embedded directly:
 
 | Column | Description |
 |---|---|
-| `i` | File index (matches lightcurve filename suffix) |
-| `objectid` | Object ID |
+| `objectid` | Object ID : **must be numeric, must match the filename suffix** |
 | `fieldRA` | Right ascension (degrees) |
 | `fieldDec` | Declination (degrees) |
 | *(many others)* | Simulation parameters — ignored |
