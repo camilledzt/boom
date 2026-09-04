@@ -1,0 +1,1374 @@
+[
+  {
+    "$match": {
+      "$and": [
+        {
+          "$or": [
+            {
+              "properties.photstats.g.rising.rate": {
+                "$exists": false
+              }
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.g.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.g.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.g.rising.dt": {
+                    "$lte": 3
+                  }
+                },
+                {
+                  "properties.photstats.g.rising.dt": {
+                    "$gt": 0.3
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.g.fading.rate": {
+                "$exists": false
+              }
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.g.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.g.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.g.fading.dt": {
+                    "$lte": 30
+                  }
+                },
+                {
+                  "properties.photstats.g.fading.dt": {
+                    "$gt": 0.3
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.r.rising.rate": {
+                "$exists": false
+              }
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.r.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.r.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.r.rising.dt": {
+                    "$lte": 3
+                  }
+                },
+                {
+                  "properties.photstats.r.rising.dt": {
+                    "$gt": 0.3
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.r.fading.rate": {
+                "$exists": false
+              }
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.r.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.r.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.r.fading.dt": {
+                    "$lte": 30
+                  }
+                },
+                {
+                  "properties.photstats.r.fading.dt": {
+                    "$gt": 0.3
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.i.rising.rate": {
+                "$exists": false
+              }
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.i.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.i.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.i.rising.dt": {
+                    "$lte": 3
+                  }
+                },
+                {
+                  "properties.photstats.i.rising.dt": {
+                    "$gt": 0.3
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.i.fading.rate": {
+                "$exists": false
+              }
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.i.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.i.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.i.fading.dt": {
+                    "$lte": 30
+                  }
+                },
+                {
+                  "properties.photstats.i.fading.dt": {
+                    "$gt": 0.3
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.z.rising.rate": {
+                "$exists": false
+              }
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.z.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.z.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.z.rising.dt": {
+                    "$lte": 7
+                  }
+                },
+                {
+                  "properties.photstats.z.rising.dt": {
+                    "$gt": 0.3
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.z.fading.rate": {
+                "$exists": false
+              }
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.z.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.z.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.z.fading.dt": {
+                    "$lte": 45
+                  }
+                },
+                {
+                  "properties.photstats.z.fading.dt": {
+                    "$gt": 0.3
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.y.rising.rate": {
+                "$exists": false
+              }
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.y.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.y.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.y.rising.dt": {
+                    "$lte": 7
+                  }
+                },
+                {
+                  "properties.photstats.y.rising.dt": {
+                    "$gt": 0.3
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.y.fading.rate": {
+                "$exists": false
+              }
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.y.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.y.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.y.fading.dt": {
+                    "$lte": 45
+                  }
+                },
+                {
+                  "properties.photstats.y.fading.dt": {
+                    "$gt": 0.3
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.u.rising.rate": {
+                "$exists": false
+              }
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.u.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.u.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.u.rising.dt": {
+                    "$lte": 3
+                  }
+                },
+                {
+                  "properties.photstats.u.rising.dt": {
+                    "$gt": 0.3
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "properties.photstats.u.fading.rate": {
+                "$exists": false
+              }
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.u.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.u.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.u.fading.dt": {
+                    "$lte": 30
+                  }
+                },
+                {
+                  "properties.photstats.u.fading.dt": {
+                    "$gt": 0.3
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "$and": [
+                {
+                  "properties.photstats.g.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.g.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.g.rising.nb_data": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "properties.photstats.g.rising.dt": {
+                    "$lte": 3
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.g.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.g.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.g.fading.nb_data": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "properties.photstats.g.fading.dt": {
+                    "$lte": 30
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.r.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.r.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.r.rising.nb_data": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "properties.photstats.r.rising.dt": {
+                    "$lte": 3
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.r.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.r.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.r.fading.nb_data": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "properties.photstats.r.fading.dt": {
+                    "$lte": 30
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.i.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.i.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.i.rising.nb_data": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "properties.photstats.i.rising.dt": {
+                    "$lte": 3
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.i.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.i.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.i.fading.nb_data": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "properties.photstats.i.fading.dt": {
+                    "$lte": 30
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.u.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.u.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.u.rising.nb_data": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "properties.photstats.u.rising.dt": {
+                    "$lte": 3
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.u.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.u.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.u.fading.nb_data": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "properties.photstats.u.fading.dt": {
+                    "$lte": 30
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.z.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.z.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.z.rising.nb_data": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "properties.photstats.z.rising.dt": {
+                    "$lte": 7
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.y.rising.rate": {
+                    "$lt": -0.1
+                  }
+                },
+                {
+                  "properties.photstats.y.rising.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.y.rising.nb_data": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "properties.photstats.y.rising.dt": {
+                    "$lte": 7
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.z.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.z.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.z.fading.nb_data": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "properties.photstats.z.fading.dt": {
+                    "$lte": 45
+                  }
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "properties.photstats.y.fading.rate": {
+                    "$gt": 0.1
+                  }
+                },
+                {
+                  "properties.photstats.y.fading.red_chi2": {
+                    "$lte": 2
+                  }
+                },
+                {
+                  "properties.photstats.y.fading.nb_data": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "properties.photstats.y.fading.dt": {
+                    "$lte": 45
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "candidate.shape_flag": {
+            "$eq": false
+          }
+        },
+        {
+          "candidate.apFlux_flag": {
+            "$eq": false
+          }
+        },
+        {
+          "candidate.centroid_flag": {
+            "$eq": false
+          }
+        },
+        {
+          "candidate.isDipole": {
+            "$eq": false
+          }
+        },
+        {
+          "candidate.forced_PsfFlux_flag": {
+            "$eq": false
+          }
+        },
+        {
+          "candidate.pixelFlags_interpolated": {
+            "$eq": false
+          }
+        },
+        {
+          "candidate.pixelFlags_cr": {
+            "$eq": false
+          }
+        },
+        {
+          "candidate.forced_PsfFlux_flag_edge": {
+            "$eq": false
+          }
+        },
+        {
+          "candidate.pixelFlags_bad": {
+            "$eq": false
+          }
+        },
+        {
+          "candidate.pixelFlags_saturated": {
+            "$eq": false
+          }
+        },
+        {
+          "candidate.pixelFlags_streakCenter": {
+            "$eq": false
+          }
+        },
+        {
+          "candidate.snr_psf": {
+            "$gte": 5
+          }
+        },
+        {
+          "candidate.magpsf": {
+            "$lt": 23.5
+          }
+        },
+        {
+          "candidate.psfFlux": {
+            "$gt": 0
+          }
+        },
+        {
+          "candidate.psfFlux_flag": {
+            "$eq": false
+          }
+        },
+        {
+          "properties.star": {
+            "$eq": false
+          }
+        },
+        {
+          "properties.stationary": {
+            "$eq": true
+          }
+        },
+        {
+          "properties.near_brightstar": {
+            "$eq": false
+          }
+        },
+        {
+          "properties.rock": {
+            "$eq": false
+          }
+        },
+        {
+          "$or": [
+            {
+              "coordinates.b": {
+                "$gte": 20
+              }
+            },
+            {
+              "coordinates.b": {
+                "$lte": -20
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "$match": {
+      "$and": [
+        {
+          "$or": [
+            {
+              "$and": [
+                {
+                  "num_det_g": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "$or": [
+                    {
+                      "num_det_r": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_i": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_z": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_y": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_u": {
+                        "$gte": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "num_det_r": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "$or": [
+                    {
+                      "num_det_g": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_i": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_z": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_y": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_u": {
+                        "$gte": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "num_det_i": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "$or": [
+                    {
+                      "num_det_g": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_r": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_z": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_y": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_u": {
+                        "$gte": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "num_det_z": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "$or": [
+                    {
+                      "num_det_g": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_r": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_i": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_y": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_u": {
+                        "$gte": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "num_det_y": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "$or": [
+                    {
+                      "num_det_g": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_r": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_i": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_z": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_u": {
+                        "$gte": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "num_det_u": {
+                    "$gte": 2
+                  }
+                },
+                {
+                  "$or": [
+                    {
+                      "num_det_g": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_r": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_i": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_z": {
+                        "$gte": 1
+                      }
+                    },
+                    {
+                      "num_det_y": {
+                        "$gte": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$nor": [
+            {
+              "$and": [
+                {
+                  "WiseW1W2_gt1": {
+                    "$eq": true
+                  }
+                },
+                {
+                  "$and": [
+                    {
+                      "$expr": {
+                        "$gt": [
+                          {
+                            "$size": "$prv_cands_90_bin_hist_arr"
+                          },
+                          50
+                        ]
+                      }
+                    },
+                    {
+                      "$or": [
+                        {
+                          "$and": [
+                            {
+                              "$expr": {
+                                "$gt": [
+                                  {
+                                    "$size": "$dets_jd_btw_90_180"
+                                  },
+                                  10
+                                ]
+                              }
+                            },
+                            {
+                              "$expr": {
+                                "$gt": [
+                                  {
+                                    "$size": "$dets_jd_btw_180_270"
+                                  },
+                                  10
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "$and": [
+                            {
+                              "$expr": {
+                                "$gt": [
+                                  {
+                                    "$size": "$dets_jd_btw_180_270"
+                                  },
+                                  10
+                                ]
+                              }
+                            },
+                            {
+                              "$expr": {
+                                "$gt": [
+                                  {
+                                    "$size": "$dets_jd_btw_270_360"
+                                  },
+                                  10
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "$and": [
+                            {
+                              "$expr": {
+                                "$gt": [
+                                  {
+                                    "$size": "$dets_jd_btw_270_360"
+                                  },
+                                  10
+                                ]
+                              }
+                            },
+                            {
+                              "$expr": {
+                                "$gt": [
+                                  {
+                                    "$size": "$dets_jd_btw_360_450"
+                                  },
+                                  10
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "$and": [
+                            {
+                              "$expr": {
+                                "$gt": [
+                                  {
+                                    "$size": "$dets_jd_btw_360_450"
+                                  },
+                                  10
+                                ]
+                              }
+                            },
+                            {
+                              "$expr": {
+                                "$gt": [
+                                  {
+                                    "$size": "$dets_jd_btw_450_540"
+                                  },
+                                  10
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "$and": [
+                            {
+                              "$expr": {
+                                "$gt": [
+                                  {
+                                    "$size": "$dets_jd_btw_450_540"
+                                  },
+                                  10
+                                ]
+                              }
+                            },
+                            {
+                              "$expr": {
+                                "$gt": [
+                                  {
+                                    "$size": "$dets_jd_btw_540_630"
+                                  },
+                                  10
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "$and": [
+                            {
+                              "$expr": {
+                                "$gt": [
+                                  {
+                                    "$size": "$dets_jd_btw_540_630"
+                                  },
+                                  10
+                                ]
+                              }
+                            },
+                            {
+                              "$expr": {
+                                "$gt": [
+                                  {
+                                    "$size": "$dets_jd_btw_630_720"
+                                  },
+                                  10
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "$and": [
+                            {
+                              "$expr": {
+                                "$gt": [
+                                  {
+                                    "$size": "$dets_jd_btw_630_720"
+                                  },
+                                  10
+                                ]
+                              }
+                            },
+                            {
+                              "$expr": {
+                                "$gt": [
+                                  {
+                                    "$size": "$dets_jd_btw_720_810"
+                                  },
+                                  10
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "$and": [
+                            {
+                              "$expr": {
+                                "$gt": [
+                                  {
+                                    "$size": "$dets_jd_btw_720_810"
+                                  },
+                                  10
+                                ]
+                              }
+                            },
+                            {
+                              "$expr": {
+                                "$gt": [
+                                  {
+                                    "$size": "$dets_jd_btw_810_900"
+                                  },
+                                  10
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$and": [
+            {
+              "Gaia_High_PM_SNR3": {
+                "$eq": false
+              }
+            },
+            {
+              "Is_Quasar": {
+                "$eq": false
+              }
+            },
+            {
+              "gaia_snr_gt5": {
+                "$eq": false
+              }
+            },
+            {
+              "TwoMass_Red_Star_IR": {
+                "$eq": false
+              }
+            }
+          ]
+        },
+        {
+          "age_from_jd_min_prv": {
+            "$lte": 20
+          }
+        },
+        {
+          "median_err": {
+            "$lte": 0.2
+          }
+        }
+      ]
+    }
+  },
+  {
+    "$project": {
+      "objectId": 1,
+      "candidate.jd": 1,
+      "properties.photstats.g.rising.rate": 1,
+      "properties.photstats.g.rising.red_chi2": 1,
+      "properties.photstats.g.rising.dt": 1,
+      "properties.photstats.g.fading.rate": 1,
+      "properties.photstats.g.fading.red_chi2": 1,
+      "properties.photstats.g.fading.dt": 1,
+      "properties.photstats.r.rising.rate": 1,
+      "properties.photstats.r.rising.red_chi2": 1,
+      "properties.photstats.r.rising.dt": 1,
+      "properties.photstats.r.fading.rate": 1,
+      "properties.photstats.r.fading.red_chi2": 1,
+      "properties.photstats.r.fading.dt": 1,
+      "properties.photstats.i.rising.rate": 1,
+      "properties.photstats.i.rising.red_chi2": 1,
+      "properties.photstats.i.rising.dt": 1,
+      "properties.photstats.i.fading.rate": 1,
+      "properties.photstats.i.fading.red_chi2": 1,
+      "properties.photstats.i.fading.dt": 1,
+      "properties.photstats.z.rising.rate": 1,
+      "properties.photstats.z.rising.red_chi2": 1,
+      "properties.photstats.z.rising.dt": 1,
+      "properties.photstats.z.fading.rate": 1,
+      "properties.photstats.z.fading.red_chi2": 1,
+      "properties.photstats.z.fading.dt": 1,
+      "properties.photstats.y.rising.rate": 1,
+      "properties.photstats.y.rising.red_chi2": 1,
+      "properties.photstats.y.rising.dt": 1,
+      "properties.photstats.y.fading.rate": 1,
+      "properties.photstats.y.fading.red_chi2": 1,
+      "properties.photstats.y.fading.dt": 1,
+      "properties.photstats.u.rising.rate": 1,
+      "properties.photstats.u.rising.red_chi2": 1,
+      "properties.photstats.u.rising.dt": 1,
+      "properties.photstats.u.fading.rate": 1,
+      "properties.photstats.u.fading.red_chi2": 1,
+      "properties.photstats.u.fading.dt": 1,
+      "properties.photstats.g.rising.nb_data": 1,
+      "properties.photstats.g.fading.nb_data": 1,
+      "properties.photstats.r.rising.nb_data": 1,
+      "properties.photstats.r.fading.nb_data": 1,
+      "properties.photstats.i.rising.nb_data": 1,
+      "properties.photstats.i.fading.nb_data": 1,
+      "properties.photstats.u.rising.nb_data": 1,
+      "properties.photstats.u.fading.nb_data": 1,
+      "properties.photstats.z.rising.nb_data": 1,
+      "properties.photstats.y.rising.nb_data": 1,
+      "properties.photstats.z.fading.nb_data": 1,
+      "properties.photstats.y.fading.nb_data": 1,
+      "candidate.shape_flag": 1,
+      "candidate.apFlux_flag": 1,
+      "candidate.centroid_flag": 1,
+      "candidate.isDipole": 1,
+      "candidate.forced_PsfFlux_flag": 1,
+      "candidate.pixelFlags_interpolated": 1,
+      "candidate.pixelFlags_cr": 1,
+      "candidate.forced_PsfFlux_flag_edge": 1,
+      "candidate.pixelFlags_bad": 1,
+      "candidate.pixelFlags_saturated": 1,
+      "candidate.pixelFlags_streakCenter": 1,
+      "candidate.snr_psf": 1,
+      "candidate.magpsf": 1,
+      "candidate.psfFlux": 1,
+      "candidate.psfFlux_flag": 1,
+      "properties.star": 1,
+      "properties.stationary": 1,
+      "properties.near_brightstar": 1,
+      "properties.rock": 1,
+      "coordinates.b": 1
+    }
+  }
+]
