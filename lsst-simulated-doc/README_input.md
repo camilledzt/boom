@@ -31,7 +31,7 @@ and must match column `i` in `summary.csv`.
 
 ### v2 format (current)
 
-All rows are detections. No upper limits, no `detected` flag.
+Each row is either a detection or an upper limit, distinguished by `mag`:
 
 | Column | Type | Description |
 |---|---|---|
@@ -40,17 +40,21 @@ All rows are detections. No upper limits, no `detected` flag.
 | `time_mjd` | float | Timestamp of the observation (Modified Julian Date) |
 | `t_days` | float | Days since event t0 (not used by the pipeline) |
 | `band` | string | Photometric filter: `u`, `g`, `r`, `i`, `z`, or `y` |
-| `mag` | float | Observed magnitude |
+| `mag` | float or NaN | Observed magnitude — present for detections, NaN for upper limits |
+| `mag_err` | float or NaN | Dual-role: **1-sigma magnitude error** for detections; **limiting magnitude** for upper limits. Optional — if absent on a detection, flux_err defaults to 5% of flux. |
 
-`mag_err` is not present; the pipeline defaults `flux_err` to **5% of flux**.
+**Row classification:**
+- `mag` present → **detection** : emits a Kafka alert; added to `prvDiaSources` history of future alerts.
+- `mag` NaN + `mag_err` present : **upper limit** → no alert emitted; accumulated as a `diaForcedSource` (`psfFlux=null`, `psfFluxErr` converted from `mag_err`) in `prvDiaForcedSources` of the next detection alert. BOOM stores these as `fp_hists` and exposes them to filters as `LSST.fp_hists`.
 
-Example:
+Example (mixed detections and upper limits):
 
 ```
-objectid,candidate_id,time_mjd,t_days,band,mag
-9994,9994_1,61405.4959,0.1959,u,16.409
-,9994_2,61405.4959,0.1959,g,16.723
-,9994_3,61405.4959,0.1959,r,17.067
+objectid,candidate_id,time_mjd,t_days,band,mag,mag_err
+9994,9994_1,61405.0,0.0,r,,24.5
+,9994_2,61405.5,0.5,r,19.2,0.05
+,9994_3,61406.0,1.0,g,,23.8
+,9994_4,61406.5,1.5,g,18.9,0.04
 ```
 
 ### v1 format (legacy — `data_01_07/`)
@@ -81,9 +85,14 @@ Has both detections and upper limits in the same file, distinguished by the `det
 All magnitudes are converted to **nano-Jansky (nJy)** using AB zero-point ZP = 31.4.
 
 ```
-# v2 — detection only
+# v2 — detection
 flux      = 10^( -0.4 * (mag - 31.4) )
-flux_err  = flux * 0.05                         # 5% default (no mag_err in v2)
+flux_err  = flux * 0.05                         # 5% default (if no mag_err)
+
+# v2 — upper limit (stored in prvDiaForcedSources only, no alert emitted)
+psf_flux     = null
+psf_flux_err = 10^( -0.4 * (mag_err - 31.4) ) / 5.0   # mag_err = limiting mag; 5-sigma → 1-sigma
+# BOOM recovers: diffmaglim = -2.5 * log10(5 * psf_flux_err) + 31.4
 
 # v1 — detection
 flux      = 10^( -0.4 * (mag_obs  - 31.4) )

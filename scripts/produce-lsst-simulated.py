@@ -24,7 +24,6 @@ import time
 from pathlib import Path
 
 import lsst.alert.packet as packet
-import numpy as np
 import pandas as pd
 from confluent_kafka import Producer
 from confluent_kafka.admin import AdminClient, NewTopic
@@ -156,7 +155,7 @@ def _dia_forced_source(
         "detector": detector,
         "midpointMjdTai": mjd,
         "timeProcessedMjdTai": mjd,
-        "psfFlux": 0.0,
+        "psfFlux": None,
         "psfFluxErr": flux_err,
         "band": band,
     }
@@ -246,18 +245,24 @@ def _load_position_lookup(data_dir: Path) -> dict[int, tuple[float, float]]:
     }
 
 
-def alerts_from_csv(
-    filepath: Path, lc_index: int, ra: float, dec: float
-) -> list[dict]:
+def alerts_from_csv(filepath: Path, lc_index: int, ra: float, dec: float) -> list[dict]:
     """
-    Read a CSV file and generate one alert per row (all rows are detections).
+    Read a CSV file and generate one alert per row.
 
-    Expected columns: time_mjd, band, mag, candidate_id
+    Row classification (based on `mag` and `mag_err` columns):
+      - mag present, mag_err present  : detection; flux_err propagated from mag_err
+      - mag present, mag_err absent   : detection; flux_err defaults to 5% of flux
+      - mag absent,  mag_err present  : upper limit (mag_err = limiting magnitude);
+                                        no alert emitted, accumulated in prvDiaForcedSources
+
+    Expected columns: time_mjd, band, candidate_id, mag (and optionally mag_err).
     object_id is derived from the filename numeric suffix.
-    mag_err is not available; flux_err defaults to 5% of flux.
     """
     df = pd.read_csv(filepath)
-    df = df.dropna(subset=["mag"]).sort_values("time_mjd").reset_index(drop=True)
+    df = df.sort_values("time_mjd").reset_index(drop=True)
+
+    has_mag_err = "mag_err" in df.columns
+    df = df[df["mag"].notna() | (has_mag_err and df["mag_err"].notna())]
 
     if df.empty:
         return []
@@ -267,55 +272,77 @@ def alerts_from_csv(
         object_id = object_id + 1_000_000
 
     detections: list[dict] = []
+    forced_sources: list[dict] = []
     alerts: list[dict] = []
     detection_count = 0
 
     for visit_idx, row in df.iterrows():
-        mjd = float(row["time_mjd"]) + 37 / 86400  # UTC → TAI (current leap second offset)
+        mjd = (
+            float(row["time_mjd"]) + 37 / 86400
+        )  # UTC → TAI (current leap second offset)
         band = str(row["band"])
-        flux = mag_to_flux(float(row["mag"]))
-        if "mag_err" in df.columns and not pd.isna(row["mag_err"]):
-            flux_err = mag_err_to_flux_err(float(row["mag_err"]), flux)
-        else:
-            flux_err = flux * 0.05
-
         cid_str = str(row["candidate_id"])
         seq = int(cid_str.split("_", 1)[1])
         candid = object_id * 100_000 + seq
-        detection_count += 1
 
-        dia_src = _dia_source(
-            candid=candid,
-            object_id=object_id,
-            ra=ra,
-            dec=dec,
-            mjd=mjd,
-            band=band,
-            flux=flux,
-            flux_err=flux_err,
-            snr=None,
-            visit=int(visit_idx),
-        )
+        is_detection = not pd.isna(row.get("mag"))
 
-        first_mjd = detections[0]["midpointMjdTai"] if detections else mjd
-        dia_obj = _dia_object(
-            object_id=object_id,
-            ra=ra,
-            dec=dec,
-            first_mjd=first_mjd,
-            last_mjd=mjd,
-            n_sources=detection_count,
-        )
+        if is_detection:
+            flux = mag_to_flux(float(row["mag"]))
+            if has_mag_err and not pd.isna(row.get("mag_err")):
+                flux_err = mag_err_to_flux_err(float(row["mag_err"]), flux)
+            else:
+                flux_err = flux * 0.05
+            detection_count += 1
 
-        alert = _alert(
-            candid=candid,
-            dia_source=dia_src,
-            prv_dia_sources=list(detections),
-            prv_dia_forced_sources=None,
-            dia_object=dia_obj,
-        )
-        alerts.append(alert)
-        detections.append(dia_src)
+            dia_src = _dia_source(
+                candid=candid,
+                object_id=object_id,
+                ra=ra,
+                dec=dec,
+                mjd=mjd,
+                band=band,
+                flux=flux,
+                flux_err=flux_err,
+                snr=None,
+                visit=int(visit_idx),
+            )
+
+            first_mjd = detections[0]["midpointMjdTai"] if detections else mjd
+            dia_obj = _dia_object(
+                object_id=object_id,
+                ra=ra,
+                dec=dec,
+                first_mjd=first_mjd,
+                last_mjd=mjd,
+                n_sources=detection_count,
+            )
+
+            alert = _alert(
+                candid=candid,
+                dia_source=dia_src,
+                prv_dia_sources=list(detections),
+                prv_dia_forced_sources=list(forced_sources) if forced_sources else None,
+                dia_object=dia_obj,
+            )
+            alerts.append(alert)
+            detections.append(dia_src)
+
+        else:
+            # Upper limit: mag_err holds the limiting magnitude.
+            # psfFlux=None signals non-detection; BOOM recovers diffmaglim from psfFluxErr.
+            flux_err = mag_ulim_to_flux_err(float(row["mag_err"]))
+            forced_src = _dia_forced_source(
+                forced_id=candid,
+                object_id=object_id,
+                ra=ra,
+                dec=dec,
+                mjd=mjd,
+                band=band,
+                flux_err=flux_err,
+                visit=int(visit_idx),
+            )
+            forced_sources.append(forced_src)
 
     return alerts
 
@@ -417,7 +444,9 @@ def main() -> None:
     producer = Producer({"bootstrap.servers": args.broker, "linger.ms": 5})
 
     data_dir = Path(args.data_dir)
-    csv_files = sorted(data_dir.glob("lightcurve_*.csv"), key=lambda f: int(f.stem.split("_")[-1]))
+    csv_files = sorted(
+        data_dir.glob("lightcurve_*.csv"), key=lambda f: int(f.stem.split("_")[-1])
+    )
     if not csv_files:
         print(f"No lightcurve CSV files found in {data_dir}")
         return
@@ -437,7 +466,11 @@ def main() -> None:
         print("No summary.csv found, using (ra=0, dec=0) for all objects.")
 
     tasks = [
-        (str(f), int(f.stem.split("_")[-1]), *position_lookup.get(int(f.stem.split("_")[-1]), (0.0, 0.0)))
+        (
+            str(f),
+            int(f.stem.split("_")[-1]),
+            *position_lookup.get(int(f.stem.split("_")[-1]), (0.0, 0.0)),
+        )
         for f in csv_files
     ]
 
@@ -449,7 +482,9 @@ def main() -> None:
         initializer=_worker_init,
         initargs=(SCHEMA_VERSION, SCHEMA_ID),
     ) as pool:
-        for csv_path, object_id, payloads in pool.imap_unordered(_serialize_file, tasks):
+        for csv_path, object_id, payloads in pool.imap_unordered(
+            _serialize_file, tasks
+        ):
             if not payloads:
                 object_count += 1
                 continue

@@ -2,7 +2,7 @@
 
 ## Architecture
 
-![Pipeline architecture](boom_architecture.drawio.png)
+![Pipeline architecture](boom_architecture-Multi.drawio.png)
 
 The input CSV files are read by the Python producer, which converts each observation row into
 an LSST Avro alert and publishes it to the Kafka topic `alerts-simulated`. BOOM consumes those
