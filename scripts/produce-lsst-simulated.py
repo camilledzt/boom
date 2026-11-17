@@ -438,6 +438,15 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    sr = packet.SchemaRegistry.from_filesystem()
+    if SCHEMA_VERSION not in sr.known_versions:
+        print(
+            f"ERROR: schema version '{SCHEMA_VERSION}' not found. "
+            f"Available: {sorted(sr.known_versions)}",
+            flush=True,
+        )
+        raise SystemExit(1)
+
     if args.reset:
         reset_topic(args.broker, args.topic)
 
