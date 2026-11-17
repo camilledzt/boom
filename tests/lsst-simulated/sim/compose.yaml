@@ -59,7 +59,7 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        pip install --quiet lsst-alert-packet confluent-kafka numpy pandas && \
+        pip install --quiet lsst-alert-packet==30.2026.1900 confluent-kafka numpy pandas && \
         python /produce-lsst-simulated.py \
           --broker broker:29092 \
           --topic alerts-simulated_${SIM_ID:-default} \
