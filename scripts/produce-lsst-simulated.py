@@ -28,8 +28,8 @@ import pandas as pd
 from confluent_kafka import Producer
 from confluent_kafka.admin import AdminClient, NewTopic
 
-SCHEMA_VERSION = "11.0"
-SCHEMA_ID = 1100  # boom maps 1100 → v11.0 via fallback
+SCHEMA_VERSION = "11.2"
+SCHEMA_ID = 1100  # boom maps 1100 → v11.2 via fallback
 SR_HEADER = b"\x00" + struct.pack(">I", SCHEMA_ID)  # Confluent Schema Registry prefix
 
 KAFKA_TOPIC = "alerts-simulated"
