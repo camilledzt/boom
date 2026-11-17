@@ -71,6 +71,8 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_LOG_DIRS: /var/lib/kafka/data
       KAFKA_NUM_PARTITIONS: 15
+      KAFKA_LOG_RETENTION_HOURS: 6
+      KAFKA_LOG_RETENTION_BYTES: 536870912   # 512 MB max par partition
       KAFKA_HEAP_OPTS: "-Xmx512M -Xms512M -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
     healthcheck:
       test: /opt/kafka/bin/kafka-cluster.sh cluster-id --bootstrap-server broker:9092
